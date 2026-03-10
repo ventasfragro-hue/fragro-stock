@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -716,11 +715,20 @@
         </div>
         <div id="btnNuevoDespachoWrap"><button class="btn-primary" id="btnNuevaOrden" onclick="abrirFormDespacho()" style="padding:10px 24px;">+ Nueva Orden</button></div>
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
         <button class="tab-btn active" id="dFiltroTodos" onclick="filtrarDespachos('todos',this)">Todos</button>
         <button class="tab-btn" id="dFiltroPendiente" onclick="filtrarDespachos('pendiente',this)">🟡 Pendientes</button>
         <button class="tab-btn" id="dFiltroPreparacion" onclick="filtrarDespachos('preparacion',this)">🔵 En Preparación</button>
         <button class="tab-btn" id="dFiltroDespachado" onclick="filtrarDespachos('despachado',this)">🟢 Despachados</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Transporte:</span>
+        <button class="tab-btn" id="dFiltroTransTodos" onclick="filtrarTransporte('todos',this)" style="font-size:11px;padding:4px 10px;">Todos</button>
+        <button class="tab-btn" id="dFiltroCredifin" onclick="filtrarTransporte('Credifin',this)" style="font-size:11px;padding:4px 10px;">Credifin</button>
+        <button class="tab-btn" id="dFiltroCingolani" onclick="filtrarTransporte('Cingolani',this)" style="font-size:11px;padding:4px 10px;">Cingolani</button>
+        <button class="tab-btn" id="dFiltroViaCargo" onclick="filtrarTransporte('Vía Cargo',this)" style="font-size:11px;padding:4px 10px;">Vía Cargo</button>
+        <button class="tab-btn" id="dFiltroCotrap" onclick="filtrarTransporte('Cotrap',this)" style="font-size:11px;padding:4px 10px;">Cotrap</button>
+        <button class="tab-btn" id="dFiltroDelPrado" onclick="filtrarTransporte('Del Prado',this)" style="font-size:11px;padding:4px 10px;">Del Prado</button>
       </div>
       <div id="despachosContainer"></div>
 
@@ -2188,19 +2196,67 @@ async function loadComprobantes() {
   updateNavComprobantes();
 }
 
+let notifBannerPausado = false;
+
 function showNotificationBanner() {
   if (!isDaniel()) return;
+  if (notifBannerPausado) return;
   const pendComp = (comprobantes||[]).filter(c=>c.estado==='pendiente').length;
   const pendVenta = (ventas||[]).filter(v=>v.estado==='para_aprobar').length;
   const total = pendComp + pendVenta;
-  if (total === 0) return;
   const existing = document.getElementById('notifBanner');
   if (existing) existing.remove();
+  if (total === 0) return;
   const banner = document.createElement('div');
   banner.id = 'notifBanner';
-  banner.style.cssText = 'position:fixed;top:64px;left:0;right:0;z-index:99;background:rgba(57,255,20,0.1);border-bottom:1px solid rgba(57,255,20,0.3);padding:10px 28px;display:flex;align-items:center;justify-content:space-between;font-size:13px;';
-  banner.innerHTML = `<span>🔔 <strong style="color:var(--accent);">${total} elemento(s) esperan tu revisión</strong> — ${pendComp} comprobante(s) sin ver · ${pendVenta} venta(s) para aprobar</span><button onclick="document.getElementById('notifBanner').remove()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:16px;">✕</button>`;
+  banner.style.cssText = [
+    'position:fixed',
+    'top:64px',
+    'left:0',
+    'right:0',
+    'z-index:150',
+    'background:linear-gradient(90deg,#0d2200,#1a3a00,#0d2200)',
+    'border-bottom:2px solid #39FF14',
+    'box-shadow:0 4px 24px rgba(57,255,20,0.18)',
+    'padding:13px 24px',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'gap:0',
+  ].join(';');
+  banner.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:900px;">'
+    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    + '<span style="font-size:20px;animation:bellShake 1s ease 0s 3;">🔔</span>'
+    + '<div>'
+    + '<div style="font-size:14px;font-weight:700;color:#39FF14;letter-spacing:0.3px;">'
+    + total + ' elemento' + (total>1?'s':'') + ' esperan tu revisión'
+    + '</div>'
+    + '<div style="font-size:12px;color:#a0e080;margin-top:2px;">'
+    + (pendComp>0 ? '<span style="margin-right:14px;">📄 '+pendComp+' comprobante'+(pendComp>1?'s':'')+' sin ver</span>' : '')
+    + (pendVenta>0 ? '<span>💰 '+pendVenta+' venta'+(pendVenta>1?'s':'')+' para aprobar</span>' : '')
+    + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-shrink:0;">'
+    + '<button onclick="pausarNotifBanner()" style="background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);color:#39FF14;cursor:pointer;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;letter-spacing:0.5px;">⏸ PAUSAR</button>'
+    + '<button onclick="document.getElementById('notifBanner').remove()" style="background:transparent;border:1px solid rgba(255,255,255,0.1);color:#888;cursor:pointer;font-size:14px;padding:4px 10px;border-radius:6px;">✕</button>'
+    + '</div>'
+    + '</div>';
+  // Agregar animación campana si no existe
+  if (!document.getElementById('bellStyle')) {
+    const s = document.createElement('style');
+    s.id = 'bellStyle';
+    s.textContent = '@keyframes bellShake{0%,100%{transform:rotate(0)}15%{transform:rotate(15deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(10deg)}60%{transform:rotate(-8deg)}75%{transform:rotate(5deg)}}';
+    document.head.appendChild(s);
+  }
   document.body.insertBefore(banner, document.body.children[1]);
+}
+
+function pausarNotifBanner() {
+  notifBannerPausado = true;
+  const b = document.getElementById('notifBanner');
+  if (b) b.remove();
 }
 
 function updateNavComprobantes() {
@@ -3044,72 +3100,119 @@ function updateNavDespachos() {
   if (el) { el.textContent = pendientes; el.style.display = pendientes > 0 ? '' : 'none'; }
 }
 
+// Estado de filtros de despachos
+let filtroEstadoDespacho = 'todos';
+let filtroTransporteDespacho = 'todos';
+
 function renderDespachos(filtro) {
-  filtro = filtro || 'todos';
+  filtro = filtro || filtroEstadoDespacho || 'todos';
+  filtroEstadoDespacho = filtro;
   const container = document.getElementById('despachosContainer');
   if (!container) return;
 
-  // Botón nuevo: Daniel, Facundo, Ignacio (NO Depósito)
   const wrap = document.getElementById('btnNuevoDespachoWrap');
   if (wrap) {
     const puedeCrear = currentUser !== 'Depósito';
     wrap.innerHTML = puedeCrear
-      ? '<button class="btn-primary" onclick="document.getElementById(\'formNuevoDespacho\').style.display=\'block\'" style="padding:10px 24px;">+ Nueva Orden</button>'
+      ? '<button class="btn-primary" onclick="document.getElementById('formNuevoDespacho').style.display='block'" style="padding:10px 24px;">+ Nueva Orden</button>'
       : '';
-  }
-
-  let lista = [...(despachos||[])];
-  if (filtro !== 'todos') lista = lista.filter(d => d.estado === filtro);
-  lista.sort((a,b) => new Date(a.fecha_despacho||'9999') - new Date(b.fecha_despacho||'9999'));
-
-  if (lista.length === 0) {
-    container.innerHTML = '<div style="color:#555;text-align:center;padding:40px;">No hay órdenes en este filtro</div>';
-    return;
   }
 
   const colorEstado = { pendiente: '#fbbf24', preparacion: '#60a5fa', despachado: '#39FF14' };
   const labelEstado = { pendiente: '🟡 Pendiente', preparacion: '🔵 En Preparación', despachado: '🟢 Despachado' };
 
-  container.innerHTML = lista.map(d => {
+  let lista = [...(despachos||[])];
+  if (filtro !== 'todos') lista = lista.filter(d => d.estado === filtro);
+  if (filtroTransporteDespacho !== 'todos') lista = lista.filter(d => d.transporte === filtroTransporteDespacho);
+
+  const activos = lista.filter(d => d.estado !== 'despachado');
+  const historial = lista.filter(d => d.estado === 'despachado');
+  activos.sort((a,b) => new Date(a.fecha_despacho||'9999') - new Date(b.fecha_despacho||'9999'));
+  historial.sort((a,b) => new Date(b.fecha_despacho||'9999') - new Date(a.fecha_despacho||'9999'));
+
+  function cardDespacho(d) {
     const color = colorEstado[d.estado] || '#aaa';
     const label = labelEstado[d.estado] || d.estado;
     const fecha = d.fecha_despacho ? new Date(d.fecha_despacho + 'T12:00:00').toLocaleDateString('es-AR') : '—';
     const esDeposito = currentUser === 'Depósito';
     const esDaniel = currentUser === 'Daniel Cardozo';
-
     let botones = '';
-    if (d.estado === 'pendiente' && esDeposito) {
-      botones += `<button onclick="avanzarDespacho(${d.id},'preparacion')" style="padding:6px 14px;background:#1e3a5f;color:#60a5fa;border:1px solid #60a5fa;border-radius:6px;cursor:pointer;font-size:12px;">🔵 En Preparación</button>`;
-    }
-    if (d.estado === 'preparacion' && esDeposito) {
-      botones += `<button onclick="avanzarDespacho(${d.id},'despachado')" style="padding:6px 14px;background:#0a2a0a;color:#39FF14;border:1px solid #39FF14;border-radius:6px;cursor:pointer;font-size:12px;">🟢 Marcar Despachado</button>`;
-    }
-    if (esDaniel && d.estado !== 'despachado') {
-      botones += ` <button onclick="eliminarDespacho(${d.id})" style="padding:6px 14px;background:#2a0a0a;color:#ef4444;border:1px solid #ef4444;border-radius:6px;cursor:pointer;font-size:12px;">🗑 Eliminar</button>`;
+    if (d.estado === 'pendiente' && esDeposito)
+      botones += '<button onclick="avanzarDespacho('+d.id+','preparacion')" style="padding:6px 14px;background:#1e3a5f;color:#60a5fa;border:1px solid #60a5fa;border-radius:6px;cursor:pointer;font-size:12px;">🔵 En Preparación</button>';
+    if (d.estado === 'preparacion' && esDeposito)
+      botones += '<button onclick="avanzarDespacho('+d.id+','despachado')" style="padding:6px 14px;background:#0a2a0a;color:#39FF14;border:1px solid #39FF14;border-radius:6px;cursor:pointer;font-size:12px;">🟢 Marcar Despachado</button>';
+    if (esDaniel && d.estado !== 'despachado')
+      botones += ' <button onclick="eliminarDespacho('+d.id+')" style="padding:6px 14px;background:#2a0a0a;color:#ef4444;border:1px solid #ef4444;border-radius:6px;cursor:pointer;font-size:12px;">🗑 Eliminar</button>';
+    return '<div style="background:#112240;border:1px solid '+color+'33;border-left:4px solid '+color+';border-radius:12px;padding:18px;margin-bottom:12px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
+      +'<div><span style="font-weight:700;font-size:16px;color:#fff;">'+d.transporte+'</span>'
+      +'<span style="margin-left:12px;padding:3px 10px;background:'+color+'22;color:'+color+';border-radius:20px;font-size:12px;font-weight:600;">'+label+'</span></div>'
+      +'<div style="color:#aaa;font-size:13px;">📅 '+fecha+'</div></div>'
+      +'<div style="margin-top:10px;color:#ccc;font-size:14px;"><strong style="color:#aaa;">Destinatario:</strong> '+(d.destinatario||'—')+'</div>'
+      +'<div style="margin-top:6px;color:#ccc;font-size:13px;white-space:pre-wrap;"><strong style="color:#aaa;">Detalle:</strong> '+(d.detalle||'—')+'</div>'
+      +(d.observaciones ? '<div style="margin-top:6px;color:#aaa;font-size:12px;"><strong>Obs:</strong> '+d.observaciones+'</div>' : '')
+      +'<div style="margin-top:6px;color:#555;font-size:11px;">Creado por '+(d.creado_por||'—')+'</div>'
+      +(botones ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+botones+'</div>' : '')
+      +'</div>';
+  }
+
+  let html = '';
+
+  if (activos.length === 0 && historial.length === 0) {
+    html = '<div style="color:#555;text-align:center;padding:40px;">No hay órdenes en este filtro</div>';
+  } else {
+    if (activos.length > 0) {
+      if (filtroTransporteDespacho !== 'todos') {
+        html += activos.map(cardDespacho).join('');
+      } else {
+        const porTransporte = {};
+        activos.forEach(d => { if (!porTransporte[d.transporte]) porTransporte[d.transporte]=[]; porTransporte[d.transporte].push(d); });
+        Object.keys(porTransporte).sort().forEach(t => {
+          const items = porTransporte[t];
+          html += '<div style="margin-bottom:20px;">'
+            +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid rgba(57,255,20,0.1);">'
+            +'<span style="font-size:14px;font-weight:700;color:var(--accent);">🚚 '+t+'</span>'
+            +'<span style="font-size:11px;color:var(--text3);">'+items.length+' orden'+(items.length>1?'es':'')+'</span></div>'
+            +items.map(cardDespacho).join('')+'</div>';
+        });
+      }
+    } else if (filtro !== 'despachado') {
+      html += '<div style="color:#555;text-align:center;padding:20px;">No hay órdenes activas en este filtro</div>';
     }
 
-    return `<div style="background:#112240;border:1px solid ${color}33;border-left:4px solid ${color};border-radius:12px;padding:18px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-        <div>
-          <span style="font-weight:700;font-size:16px;color:#fff;">${d.transporte}</span>
-          <span style="margin-left:12px;padding:3px 10px;background:${color}22;color:${color};border-radius:20px;font-size:12px;font-weight:600;">${label}</span>
-        </div>
-        <div style="color:#aaa;font-size:13px;">📅 ${fecha}</div>
-      </div>
-      <div style="margin-top:10px;color:#ccc;font-size:14px;"><strong style="color:#aaa;">Destinatario:</strong> ${d.destinatario || '—'}</div>
-      <div style="margin-top:6px;color:#ccc;font-size:13px;white-space:pre-wrap;"><strong style="color:#aaa;">Detalle:</strong> ${d.detalle || '—'}</div>
-      ${d.observaciones ? `<div style="margin-top:6px;color:#aaa;font-size:12px;"><strong>Obs:</strong> ${d.observaciones}</div>` : ''}
-      <div style="margin-top:6px;color:#555;font-size:11px;">Creado por ${d.creado_por || '—'}</div>
-      ${botones ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">${botones}</div>` : ''}
-    </div>`;
-  }).join('');
+    if (historial.length > 0 && filtro !== 'pendiente' && filtro !== 'preparacion') {
+      html += '<div style="margin-top:28px;">'
+        +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid rgba(57,255,20,0.1);">'
+        +'<span style="font-size:14px;font-weight:700;color:#39FF14;">📦 Historial de Despachados</span>'
+        +'<span style="font-size:11px;color:var(--text3);">'+historial.length+' envío'+(historial.length>1?'s':'')+'</span></div>'
+        +historial.map(cardDespacho).join('')+'</div>';
+    }
+  }
+
+  container.innerHTML = html;
 }
 
 function filtrarDespachos(filtro, el) {
-  document.querySelectorAll('#view-despachos .tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#view-despachos .tab-btn').forEach(b => {
+    if (!b.id || (!b.id.startsWith('dFiltroCredifin') && !b.id.startsWith('dFiltroCingolani') && !b.id.startsWith('dFiltroViaCargo') && !b.id.startsWith('dFiltroCotrap') && !b.id.startsWith('dFiltroDelPrado') && b.id !== 'dFiltroTransTodos')) {
+      b.classList.remove('active');
+    }
+  });
   if (el) el.classList.add('active');
+  filtroEstadoDespacho = filtro;
   renderDespachos(filtro);
 }
+
+function filtrarTransporte(transporte, el) {
+  ['dFiltroTransTodos','dFiltroCredifin','dFiltroCingolani','dFiltroViaCargo','dFiltroCotrap','dFiltroDelPrado'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.classList.remove('active');
+  });
+  if (el) el.classList.add('active');
+  filtroTransporteDespacho = transporte;
+  renderDespachos(filtroEstadoDespacho);
+}
+
 
 async function crearDespacho() {
   if (currentUser === 'Depósito') { alert('No tenés permiso para crear órdenes.'); return; }
