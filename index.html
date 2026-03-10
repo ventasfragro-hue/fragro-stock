@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -714,7 +713,7 @@
           <div class="page-title">🚚 Despachos</div>
           <div class="page-sub">Órdenes de envío por transporte</div>
         </div>
-        <div id="btnNuevoDespachoWrap"></div>
+        <div id="btnNuevoDespachoWrap"><button class="btn-primary" id="btnNuevaOrden" onclick="abrirFormDespacho()" style="padding:10px 24px;">+ Nueva Orden</button></div>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
         <button class="tab-btn active" id="dFiltroTodos" onclick="filtrarDespachos('todos',this)">Todos</button>
@@ -1172,7 +1171,11 @@ function showView(name, el) {
   if (name==='history') renderHistory();
   if (name==='pedidos') { switchPedidoTab('lista'); loadPedidos(); }
   if (name==='addProduct') { buildRubrosUI(); }
-  if (name==='despachos') { renderDespachos('todos'); }
+  if (name==='despachos') {
+    renderDespachos('todos');
+    const btnOrden = document.getElementById('btnNuevaOrden');
+    if (btnOrden) btnOrden.style.display = currentUser === 'Depósito' ? 'none' : '';
+  }
   if (name==='smartstock') { calcularSugerencias(); }
   if (name==='ventas') {
     const btnNV = document.getElementById('btnNuevaVenta');
@@ -3109,6 +3112,11 @@ async function eliminarDespacho(id) {
     updateNavDespachos();
     renderDespachos('todos');
   }
+}
+
+function abrirFormDespacho() {
+  if (currentUser === 'Depósito') return;
+  document.getElementById('formNuevoDespacho').style.display = 'block';
 }
 
 // ── Lightbox ESC key ──
