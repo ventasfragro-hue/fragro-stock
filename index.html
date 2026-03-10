@@ -2,8 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=devi
-  ce-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FRAGRO — Control de Stock</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -930,6 +929,31 @@ async function supaGet(table, params='') {
   return r.json();
 }
 
+async function supaGetAll(table, params='') {
+  // Trae TODOS los registros paginando de a 1000
+  const hasOrder = params.includes('order=');
+  const orderStr = hasOrder ? '' : '&order=id.asc';
+  const baseParams = params + orderStr;
+  let allData = [];
+  let offset = 0;
+  const pageSize = 1000;
+  while (true) {
+    const r = await fetch(`${SUPA_URL}/rest/v1/${table}?${baseParams}&limit=${pageSize}&offset=${offset}`, {
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY, 'Range-Unit': 'items' }
+    });
+    if (!r.ok) {
+      const txt = await r.text();
+      throw new Error('Supabase ' + table + ': ' + r.status + ' ' + txt.substring(0,200));
+    }
+    const page = await r.json();
+    if (!page || page.length === 0) break;
+    allData = allData.concat(page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allData;
+}
+
 async function supaPost(table, body) {
   const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
     method: 'POST',
@@ -996,7 +1020,7 @@ function fromSupaPedido(p) {
 async function syncDatos(silencioso = false) {
   try {
     const [prods, hist, peds] = await Promise.all([
-      supaGet('products'),
+      supaGetAll('products'),
       supaGet('history', 'order=id.desc&limit=200'),
       supaGet('pedidos')
     ]);
@@ -1064,7 +1088,7 @@ async function initApp() {
 
   try {
     const [prods, hist, peds, desps, comps, vents] = await Promise.all([
-      supaGet('products'),
+      supaGetAll('products'),
       supaGet('history', 'order=id.desc&limit=200'),
       supaGet('pedidos', 'order=id.desc'),
       supaGet('despachos', 'order=id.desc'),
