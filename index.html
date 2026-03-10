@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -297,6 +298,7 @@
     <div class="sidebar-section">
       <div class="sidebar-title">Gestión</div>
       <div class="nav-item" onclick="showView('addProduct',this)"><span class="nav-icon">➕</span> Agregar Producto</div>
+      <div class="nav-item" onclick="showView('ranking',this)"><span class="nav-icon">🏆</span> Ranking Ventas</div>
       <div class="nav-item" id="navSmartStock" onclick="showView('smartstock',this)" style="display:none;"><span class="nav-icon">🧠</span> Stock Inteligente <span class="nav-count" id="navSmartCount" style="background:rgba(251,146,60,0.2);color:#fb923c;">0</span></div>
     </div>
   </aside>
@@ -574,6 +576,41 @@
       </div>
       <div id="smartStockInfo" style="padding:14px 18px;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:10px;margin-bottom:20px;font-size:13px;color:#fb923c;"></div>
       <div id="smartStockTabla"></div>
+    </div>
+
+    <!-- ===== RANKING DE VENTAS ===== -->
+    <div class="view" id="view-ranking">
+      <div class="page-header">
+        <div>
+          <div class="page-title">🏆 Ranking de Ventas</div>
+          <div class="page-sub">Productos y vendedores más activos</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <select id="rankingPeriodo" onchange="renderRanking()" style="background:#1a1a1a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px 12px;font-size:13px;">
+            <option value="7">Últimos 7 días</option>
+            <option value="30" selected>Últimos 30 días</option>
+            <option value="90">Últimos 90 días</option>
+            <option value="0">Todo el historial</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;" id="rankingCards">
+        <!-- cards de resumen -->
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">📦 Top Productos</div>
+          <div id="rankingProductos"></div>
+        </div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px;">👤 Por Vendedor</div>
+          <div id="rankingVendedores"></div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:12px;margin-top:20px;text-transform:uppercase;letter-spacing:1px;">📂 Por Rubro</div>
+          <div id="rankingRubros"></div>
+        </div>
+      </div>
     </div>
 
     <!-- ===== VENTAS PENDIENTES DE COBRO ===== -->
@@ -1210,6 +1247,7 @@ function showView(name, el) {
     if (btnOrden) btnOrden.style.display = currentUser === 'Depósito' ? 'none' : '';
   }
   if (name==='smartstock') { calcularSugerencias(); }
+  if (name==='ranking') { renderRanking(); }
   if (name==='ventas') {
     const btnNV = document.getElementById('btnNuevaVenta');
     if (btnNV) btnNV.style.display = isVendedor() ? 'block' : 'none';
@@ -1301,6 +1339,135 @@ function renderAll() {
 }
 
 // DASHBOARD
+function renderRanking() {
+  const diasEl = document.getElementById('rankingPeriodo');
+  const dias = diasEl ? parseInt(diasEl.value) : 30;
+  const ahora = new Date();
+  const desde = dias === 0 ? null : new Date(ahora - dias * 86400000);
+
+  const ventas = history.filter(h => {
+    if (h.type !== 'sale') return false;
+    if (!desde) return true;
+    return new Date(h.date) >= desde;
+  });
+
+  // --- TOP PRODUCTOS ---
+  const porProducto = {};
+  ventas.forEach(h => {
+    const key = h.desc || 'Sin nombre';
+    if (!porProducto[key]) porProducto[key] = { qty: 0, veces: 0, rubro: h.rubro || '' };
+    porProducto[key].qty += (h.qty || 0);
+    porProducto[key].veces++;
+  });
+  const topProductos = Object.entries(porProducto).sort((a,b) => b[1].qty - a[1].qty).slice(0, 15);
+  const maxQty = topProductos[0]?.[1].qty || 1;
+
+  // --- POR VENDEDOR ---
+  const porVendedor = {};
+  ventas.forEach(h => {
+    const u = h.user || 'Desconocido';
+    if (!porVendedor[u]) porVendedor[u] = { qty: 0, veces: 0 };
+    porVendedor[u].qty += (h.qty || 0);
+    porVendedor[u].veces++;
+  });
+  const topVendedores = Object.entries(porVendedor).sort((a,b) => b[1].qty - a[1].qty);
+
+  // --- POR RUBRO ---
+  const porRubro = {};
+  ventas.forEach(h => {
+    const r = h.rubro || 'Sin rubro';
+    if (!porRubro[r]) porRubro[r] = { qty: 0, veces: 0 };
+    porRubro[r].qty += (h.qty || 0);
+    porRubro[r].veces++;
+  });
+  const topRubros = Object.entries(porRubro).sort((a,b) => b[1].qty - a[1].qty).slice(0, 8);
+  const maxRubroQty = topRubros[0]?.[1].qty || 1;
+
+  // --- CARDS RESUMEN ---
+  const totalUnidades = ventas.reduce((s,h) => s + (h.qty||0), 0);
+  const totalMovs = ventas.length;
+  const cards = document.getElementById('rankingCards');
+  if (cards) {
+    cards.innerHTML =
+      '<div style="background:rgba(57,255,20,0.06);border:1px solid rgba(57,255,20,0.2);border-radius:12px;padding:18px 22px;">'
+      +'<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Total Unidades Vendidas</div>'
+      +'<div style="font-size:32px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;">'+totalUnidades+'</div>'
+      +'<div style="font-size:12px;color:var(--text3);margin-top:4px;">en '+totalMovs+' movimiento'+(totalMovs!==1?'s':'')+'</div>'
+      +'</div>'
+      +'<div style="background:rgba(57,255,20,0.06);border:1px solid rgba(57,255,20,0.2);border-radius:12px;padding:18px 22px;">'
+      +'<div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Producto Más Vendido</div>'
+      +(topProductos[0]
+        ? '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px;">🥇 '+topProductos[0][0].substring(0,35)+(topProductos[0][0].length>35?'…':'')+'</div>'
+          +'<div style="font-size:13px;color:var(--accent);font-family:'DM Mono',monospace;">'+topProductos[0][1].qty+' unidades</div>'
+        : '<div style="color:var(--text3);">Sin datos</div>')
+      +'</div>';
+  }
+
+  // --- RENDER PRODUCTOS ---
+  const elProd = document.getElementById('rankingProductos');
+  if (elProd) {
+    if (topProductos.length === 0) {
+      elProd.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center;">Sin ventas en este período</div>';
+    } else {
+      elProd.innerHTML = topProductos.map(([nombre, datos], i) => {
+        const pct = Math.round((datos.qty / maxQty) * 100);
+        const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+        return '<div style="margin-bottom:10px;">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">'
+          +'<div style="font-size:12px;color:var(--text2);max-width:75%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+          +(medal?'<span style="margin-right:4px;">'+medal+'</span>':'<span style="color:var(--text3);margin-right:6px;font-size:11px;">#'+(i+1)+'</span>')
+          +nombre+'</div>'
+          +'<div style="font-size:12px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;white-space:nowrap;margin-left:8px;">'+datos.qty+' u.</div>'
+          +'</div>'
+          +'<div style="background:#1a1a1a;border-radius:4px;height:5px;overflow:hidden;">'
+          +'<div style="background:var(--accent);height:100%;width:'+pct+'%;border-radius:4px;transition:width 0.5s;"></div>'
+          +'</div>'
+          +'<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+datos.veces+' vez'+(datos.veces!==1?'es':'')+' · '+datos.rubro+'</div>'
+          +'</div>';
+      }).join('');
+    }
+  }
+
+  // --- RENDER VENDEDORES ---
+  const elVend = document.getElementById('rankingVendedores');
+  if (elVend) {
+    const colores = ['#39FF14','#60a5fa','#fb923c','#f472b6'];
+    elVend.innerHTML = topVendedores.length === 0
+      ? '<div style="color:var(--text3);padding:10px;">Sin datos</div>'
+      : topVendedores.map(([nombre, datos], i) => {
+          const pct = Math.round((datos.qty / (topVendedores[0][1].qty||1)) * 100);
+          const color = colores[i] || '#aaa';
+          return '<div style="margin-bottom:12px;">'
+            +'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'
+            +'<span style="font-size:13px;color:var(--text2);">'+nombre+'</span>'
+            +'<span style="font-size:12px;font-weight:700;color:'+color+';font-family:'DM Mono',monospace;">'+datos.qty+' u.</span>'
+            +'</div>'
+            +'<div style="background:#1a1a1a;border-radius:4px;height:6px;">'
+            +'<div style="background:'+color+';height:100%;width:'+pct+'%;border-radius:4px;"></div>'
+            +'</div>'
+            +'<div style="font-size:10px;color:var(--text3);margin-top:2px;">'+datos.veces+' movimiento'+(datos.veces!==1?'s':'')+'</div>'
+            +'</div>';
+        }).join('');
+  }
+
+  // --- RENDER RUBROS ---
+  const elRub = document.getElementById('rankingRubros');
+  if (elRub) {
+    elRub.innerHTML = topRubros.length === 0
+      ? '<div style="color:var(--text3);padding:10px;">Sin datos</div>'
+      : topRubros.map(([rubro, datos]) => {
+          const pct = Math.round((datos.qty / maxRubroQty) * 100);
+          return '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+            +'<div style="font-size:11px;color:var(--text2);width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+rubro+'</div>'
+            +'<div style="flex:1;background:#1a1a1a;border-radius:4px;height:5px;">'
+            +'<div style="background:rgba(57,255,20,0.6);height:100%;width:'+pct+'%;border-radius:4px;"></div>'
+            +'</div>'
+            +'<div style="font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;white-space:nowrap;width:40px;text-align:right;">'+datos.qty+'</div>'
+            +'</div>';
+        }).join('');
+  }
+}
+
 function toggleAlertaRubro(id) {
   const el = document.getElementById(id);
   const arrow = document.getElementById(id+'-arrow');
