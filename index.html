@@ -2,7 +2,8 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=devi
+  ce-width, initial-scale=1.0">
 <title>FRAGRO — Control de Stock</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1062,7 +1063,7 @@ async function initApp() {
   document.body.appendChild(loadBanner);
 
   try {
-    const [prods, hist, peds, comps, vents] = await Promise.all([
+    const [prods, hist, peds, desps, comps, vents] = await Promise.all([
       supaGet('products'),
       supaGet('history', 'order=id.desc&limit=200'),
       supaGet('pedidos', 'order=id.desc'),
@@ -1074,7 +1075,6 @@ async function initApp() {
     products     = Array.isArray(prods) ? prods.map(fromSupa) : [];
     history      = Array.isArray(hist)  ? hist.map(fromSupaHistory) : [];
     pedidos      = Array.isArray(peds)  ? peds.map(fromSupaPedido).filter(Boolean) : [];
-    const desps = results[5];
     despachos    = Array.isArray(desps) ? desps : [];
     comprobantes = Array.isArray(comps) ? comps : [];
     ventas       = Array.isArray(vents) ? vents : [];
