@@ -1081,7 +1081,25 @@ async function initApp() {
 }
 
 function buildRubrosUI() {
-  const rubros = [...new Set(products.map(p=>p.rubro))].sort();
+  const rubrosBase = [
+    'Accesorios Trailers',
+    'Aros-Ejes-Mazas',
+    'Alambres-Discos-Seguridad',
+    'Cajas Desmalezadora',
+    'Cadenas Donghua ASA',
+    'Cilindros Hidráulicos',
+    'Elásticos Trailers',
+    'Engranajes',
+    'Kits Easy Cut II - Schumager',
+    'Llantas Agrícolas',
+    'Llantas Camión',
+    'Poleas',
+    'Repuestos Cardánicos',
+    'Valoppi - Maquinaria Agrícola'
+  ];
+  const rubrosEnBD = [...new Set(products.map(p=>p.rubro).filter(Boolean))];
+  const rubrosExtra = rubrosEnBD.filter(r => !rubrosBase.includes(r)).sort();
+  const rubros = [...rubrosBase, ...rubrosExtra];
 
   const rf = document.getElementById('rubroFilter');
   rf.innerHTML = '<option value="">Todos los rubros</option>';
