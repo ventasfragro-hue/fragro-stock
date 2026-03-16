@@ -2596,18 +2596,29 @@ function renderLineasComprobantes() {
   if (!cont) return;
   cont.innerHTML = lineasComp.map((l, i) => {
     const fotos = l.fotos64 || [];
-    const fotosHtml = fotos.length > 0
-      ? fotos.map((f, fi) => {
-          const esPdf = f.startsWith('data:application/pdf');
-          return '<div style="position:relative;display:inline-block;margin:2px;">'
-            + (esPdf
-              ? '<div style="width:52px;height:52px;background:#1a1a1a;border:1px solid #333;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;">📄</div>'
-              : '<img src="'+f+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:pointer;" onclick="openLightbox(this.src)">'
-            )
-            + '<button onclick="quitarFotoLinea('+i+','+fi+')" style="position:absolute;top:-4px;right:-4px;background:#ef4444;border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:10px;cursor:pointer;line-height:16px;text-align:center;">✕</button>'
-            + '</div>';
-        }).join('')
-      : '';
+    const miniaturasHtml = fotos.map((f, fi) => {
+      const esPdf = f.startsWith('data:application/pdf');
+      return '<div style="position:relative;display:inline-block;margin:2px;">'
+        + (esPdf
+          ? '<div style="width:52px;height:52px;background:#1a1a1a;border:1px solid #333;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;">📄</div>'
+          : '<img src="'+f+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:pointer;" onclick="openLightbox(this.src)">'
+        )
+        + '<button onclick="quitarFotoLinea('+i+','+fi+')" style="position:absolute;top:-4px;right:-4px;background:#ef4444;border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:10px;cursor:pointer;line-height:16px;text-align:center;">✕</button>'
+        + '</div>';
+    }).join('');
+
+    // Inputs individuales: uno por foto cargada + uno vacío al final
+    const inputsHtml = fotos.map((f, fi) =>
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">'
+      + '<span style="font-size:11px;color:#39FF14;flex:1;">✅ Foto '+(fi+1)+' cargada</span>'
+      + '<button onclick="quitarFotoLinea('+i+','+fi+')" style="background:#2a0a0a;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">✕ quitar</button>'
+      + '</div>'
+    ).join('')
+    + '<div style="margin-top:4px;">'
+    + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px;">'+(fotos.length>0?'📎 Agregar otra foto':'📎 Foto / PDF')+'</label>'
+    + '<input type="file" accept="image/*,application/pdf" onchange="agregarUnaFoto('+i+', this)" style="width:100%;padding:4px;color:var(--text2);font-size:12px;">'
+    + '</div>';
+
     return '<div style="background:#0d1b2e;border:1px solid #1e3a5f;border-radius:10px;padding:14px;margin-bottom:10px;">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
       + '<span style="font-size:13px;font-weight:600;color:var(--accent);">Comprobante #'+(i+1)+'</span>'
@@ -2627,19 +2638,26 @@ function renderLineasComprobantes() {
       + '<option value="Efectivo" '+(l.tipo==='Efectivo'?'selected':'')+'>Efectivo</option>'
       + '</select>'
       + '</div>'
-      + '<div>'
+      + '<div style="grid-column:span 2;">'
       + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Monto ($)</label>'
       + '<input type="text" value="'+l.monto+'" placeholder="ej: 150000" inputmode="decimal" oninput="lineasComp['+i+'].monto=this.value" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">'
       + '</div>'
-      + '<div>'
-      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Fotos / PDFs (seleccioná varias a la vez)</label>'
-      + '<input type="file" id="fileInput_'+i+'" accept="image/*,application/pdf" multiple onchange="cargarFotosLinea('+i+', this)" style="width:100%;padding:4px;color:var(--text2);font-size:12px;">'
-      + '<div id="miniaturas_'+i+'" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">'+fotosHtml+'</div>'
-      + '<span id="conteoFotos_'+i+'" style="font-size:11px;color:'+(fotos.length>0?'#39FF14':'#f59e0b')+';">'+ (fotos.length>0 ? '✅ '+fotos.length+' archivo'+(fotos.length>1?'s':'')+' cargado'+(fotos.length>1?'s':'') : 'Sin archivos') +'</span>'
+      + '<div style="grid-column:span 2;">'
+      + inputsHtml
       + '</div>'
       + '</div>'
       + '</div>';
   }).join('');
+}
+
+function agregarUnaFoto(idx, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!lineasComp[idx].fotos64) lineasComp[idx].fotos64 = [];
+  comprimirImagen(file, 1200, 0.75).then(data64 => {
+    lineasComp[idx].fotos64.push(data64);
+    renderLineasComprobantes();
+  });
 }
 
 function eliminarLineaComp(idx) {
