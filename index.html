@@ -2632,9 +2632,8 @@ function renderLineasComprobantes() {
       + '<input type="text" value="'+l.monto+'" placeholder="ej: 150000" inputmode="decimal" oninput="lineasComp['+i+'].monto=this.value" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">'
       + '</div>'
       + '<div>'
-      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Fotos / PDFs</label>'
-      + '<input type="file" id="fileInput_'+i+'" accept="image/*,application/pdf" multiple style="display:none;" onchange="cargarFotosLinea('+i+', this)">'
-      + '<button type="button" onclick="document.getElementById(\'fileInput_'+i+'\').click()" style="padding:6px 12px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);color:var(--accent);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">📎 Agregar archivos</button>'
+      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Fotos / PDFs (seleccioná varias a la vez)</label>'
+      + '<input type="file" id="fileInput_'+i+'" accept="image/*,application/pdf" multiple onchange="cargarFotosLinea('+i+', this)" style="width:100%;padding:4px;color:var(--text2);font-size:12px;">'
       + '<div id="miniaturas_'+i+'" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">'+fotosHtml+'</div>'
       + '<span id="conteoFotos_'+i+'" style="font-size:11px;color:'+(fotos.length>0?'#39FF14':'#f59e0b')+';">'+ (fotos.length>0 ? '✅ '+fotos.length+' archivo'+(fotos.length>1?'s':'')+' cargado'+(fotos.length>1?'s':'') : 'Sin archivos') +'</span>'
       + '</div>'
@@ -2681,9 +2680,9 @@ function comprimirImagen(file, maxWidth, quality) {
 }
 
 function cargarFotosLinea(idx, input) {
-  const files = Array.from(input.files);
+  const files = Array.from(input.files).slice(0, 5); // máximo 5
   if (!files.length) return;
-  if (!lineasComp[idx].fotos64) lineasComp[idx].fotos64 = [];
+  lineasComp[idx].fotos64 = []; // resetear y cargar los seleccionados
   let pendientes = files.length;
   files.forEach(file => {
     comprimirImagen(file, 1200, 0.75).then(data64 => {
@@ -2692,8 +2691,6 @@ function cargarFotosLinea(idx, input) {
       if (pendientes === 0) actualizarMiniaturas(idx);
     });
   });
-  // Limpiar el input para que pueda volver a seleccionar los mismos archivos
-  input.value = '';
 }
 
 function actualizarMiniaturas(idx) {
