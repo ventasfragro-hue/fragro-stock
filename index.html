@@ -2479,8 +2479,26 @@ function renderComprobantes(filtro) {
 
     const schBadge = esSCH ? '<span class="comp-badge sch" style="margin-left:6px;">⭐ SCH - 5%</span>' : '';
 
-    const fotoHtml = c.foto_url
-      ? `<img src="${c.foto_url}" class="comp-img" onclick="openLightbox('${c.foto_url}')" title="Ver comprobante">`
+    // Soporta foto_url como string base64 único (legacy) o JSON array de fotos
+    let fotosArr = [];
+    if (c.foto_url) {
+      try {
+        const parsed = JSON.parse(c.foto_url);
+        if (Array.isArray(parsed)) fotosArr = parsed;
+        else if (typeof parsed === 'string' && parsed) fotosArr = [parsed];
+      } catch(e) {
+        if (c.foto_url.startsWith('data:') || c.foto_url.startsWith('http')) fotosArr = [c.foto_url];
+      }
+    }
+    const fotoHtml = fotosArr.length > 0
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">'
+        + fotosArr.map(f => {
+            if (f.startsWith('data:application/pdf') || f.includes('.pdf')) {
+              return '<div onclick="openLightbox(\''+f+'\')" style="width:64px;height:64px;background:#1a1a1a;border:1px solid #333;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;" title="Ver PDF">📄</div>';
+            }
+            return '<img src="'+f+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #333;cursor:pointer;" onclick="openLightbox(\''+f+'\')" title="Ver archivo">';
+          }).join('')
+        + '</div>'
       : '<div style="color:var(--text3);font-size:12px;margin-top:8px;">Sin imagen</div>';
 
     const marcarBtn = canMarcar
@@ -2521,7 +2539,7 @@ async function marcarVisto(id) {
 function showCompForm() {
   if (!isVendedor()) { alert('Solo Facundo e Ignacio pueden cargar comprobantes.'); return;
   // Inicializar con una línea
-  lineasComp = [{ numero: '', tipo: 'Transferencia', monto: '', foto64: null }];
+  lineasComp = [{ numero: '', tipo: 'Transferencia', monto: '', fotos64: [] }];
   renderLineasComprobantes();
 }
   document.getElementById('compForm').style.display = 'block';
@@ -2565,56 +2583,65 @@ function cancelCompForm() {
 }
 
 // ── MULTI-COMPROBANTES ───────────────────────────────────
-let lineasComp = []; // array de {numero, tipo, monto, foto64}
+let lineasComp = []; // array de {numero, tipo, monto, fotos64: []}
 
 function agregarLineaComprobante() {
   if (lineasComp.length >= 10) { alert('Máximo 10 comprobantes por cobro.'); return; }
-  const idx = lineasComp.length;
-  lineasComp.push({ numero: '', tipo: 'Transferencia', monto: '', foto64: null });
+  lineasComp.push({ numero: '', tipo: 'Transferencia', monto: '', fotos64: [] });
   renderLineasComprobantes();
 }
 
 function renderLineasComprobantes() {
   const cont = document.getElementById('lineasComprobantes');
   if (!cont) return;
-  cont.innerHTML = lineasComp.map((l, i) => `
-    <div style="background:#0d1b2e;border:1px solid #1e3a5f;border-radius:10px;padding:14px;margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <span style="font-size:13px;font-weight:600;color:var(--accent);">Comprobante #${i+1}</span>
-        ${lineasComp.length > 1 ? `<button onclick="eliminarLineaComp(${i})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;">✕</button>` : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Número</label>
-          <input type="text" value="${l.numero}" placeholder="ej: 7070" maxlength="20"
-            oninput="lineasComp[${i}].numero=this.value"
-            style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Forma de Pago</label>
-          <select onchange="lineasComp[${i}].tipo=this.value"
-            style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">
-            <option value="Transferencia" ${l.tipo==='Transferencia'?'selected':''}>Transferencia</option>
-            <option value="Cheque" ${l.tipo==='Cheque'?'selected':''}>Cheque</option>
-            <option value="ECheq" ${l.tipo==='ECheq'?'selected':''}>ECheq</option>
-            <option value="Efectivo" ${l.tipo==='Efectivo'?'selected':''}>Efectivo</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Monto ($)</label>
-          <input type="text" value="${l.monto}" placeholder="ej: 150000" inputmode="decimal"
-            oninput="lineasComp[${i}].monto=this.value"
-            style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">
-        </div>
-        <div>
-          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Foto / PDF</label>
-          <input type="file" accept="image/*,application/pdf" onchange="cargarFotoLinea(${i}, this)"
-            style="width:100%;padding:4px;color:var(--text2);font-size:12px;">
-          ${l.foto64 ? '<span style="font-size:11px;color:#39FF14;">✅ Cargada</span>' : '<span style="font-size:11px;color:#f59e0b;">Sin foto</span>'}
-        </div>
-      </div>
-    </div>
-  `).join('');
+  cont.innerHTML = lineasComp.map((l, i) => {
+    const fotos = l.fotos64 || [];
+    const fotosHtml = fotos.length > 0
+      ? fotos.map((f, fi) => {
+          const esPdf = f.startsWith('data:application/pdf');
+          return '<div style="position:relative;display:inline-block;margin:2px;">'
+            + (esPdf
+              ? '<div style="width:52px;height:52px;background:#1a1a1a;border:1px solid #333;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;">📄</div>'
+              : '<img src="'+f+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #333;cursor:pointer;" onclick="openLightbox(this.src)">'
+            )
+            + '<button onclick="quitarFotoLinea('+i+','+fi+')" style="position:absolute;top:-4px;right:-4px;background:#ef4444;border:none;border-radius:50%;width:16px;height:16px;color:#fff;font-size:10px;cursor:pointer;line-height:16px;text-align:center;">✕</button>'
+            + '</div>';
+        }).join('')
+      : '';
+    return '<div style="background:#0d1b2e;border:1px solid #1e3a5f;border-radius:10px;padding:14px;margin-bottom:10px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'
+      + '<span style="font-size:13px;font-weight:600;color:var(--accent);">Comprobante #'+(i+1)+'</span>'
+      + (lineasComp.length > 1 ? '<button onclick="eliminarLineaComp('+i+')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:18px;">✕</button>' : '')
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+      + '<div>'
+      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Número</label>'
+      + '<input type="text" value="'+l.numero+'" placeholder="ej: 7070" maxlength="20" oninput="lineasComp['+i+'].numero=this.value" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">'
+      + '</div>'
+      + '<div>'
+      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Forma de Pago</label>'
+      + '<select onchange="lineasComp['+i+'].tipo=this.value" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">'
+      + '<option value="Transferencia" '+(l.tipo==='Transferencia'?'selected':'')+'>Transferencia</option>'
+      + '<option value="Cheque" '+(l.tipo==='Cheque'?'selected':'')+'>Cheque</option>'
+      + '<option value="ECheq" '+(l.tipo==='ECheq'?'selected':'')+'>ECheq</option>'
+      + '<option value="Efectivo" '+(l.tipo==='Efectivo'?'selected':'')+'>Efectivo</option>'
+      + '</select>'
+      + '</div>'
+      + '<div>'
+      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Monto ($)</label>'
+      + '<input type="text" value="'+l.monto+'" placeholder="ej: 150000" inputmode="decimal" oninput="lineasComp['+i+'].monto=this.value" style="width:100%;padding:8px;background:#0a0a0a;border:1px solid #333;border-radius:6px;color:#fff;font-size:13px;">'
+      + '</div>'
+      + '<div>'
+      + '<label style="font-size:11px;color:var(--text2);display:block;margin-bottom:4px;">Fotos / PDFs</label>'
+      + '<input type="file" accept="image/*,application/pdf" multiple onchange="cargarFotosLinea('+i+', this)" style="width:100%;padding:4px;color:var(--text2);font-size:12px;">'
+      + (fotos.length > 0
+          ? '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">'+fotosHtml+'</div>'
+            + '<span style="font-size:11px;color:#39FF14;">✅ '+fotos.length+' archivo'+(fotos.length>1?'s':'')+' cargado'+(fotos.length>1?'s':'')+'</span>'
+          : '<span style="font-size:11px;color:#f59e0b;">Sin archivos</span>')
+      + '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
 }
 
 function eliminarLineaComp(idx) {
@@ -2622,15 +2649,25 @@ function eliminarLineaComp(idx) {
   renderLineasComprobantes();
 }
 
-function cargarFotoLinea(idx, input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    lineasComp[idx].foto64 = e.target.result;
-    renderLineasComprobantes();
-  };
-  reader.readAsDataURL(file);
+function quitarFotoLinea(lineaIdx, fotoIdx) {
+  lineasComp[lineaIdx].fotos64.splice(fotoIdx, 1);
+  renderLineasComprobantes();
+}
+
+function cargarFotosLinea(idx, input) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  if (!lineasComp[idx].fotos64) lineasComp[idx].fotos64 = [];
+  let pendientes = files.length;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      lineasComp[idx].fotos64.push(e.target.result);
+      pendientes--;
+      if (pendientes === 0) renderLineasComprobantes();
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function guardarComprobante() {
@@ -2670,7 +2707,7 @@ async function guardarComprobante() {
       tipo: l.tipo,
       nota: nota || '',
       vendedor,
-      foto_url: l.foto64 || '',
+      foto_url: JSON.stringify(l.fotos64 || []),
       estado: 'pendiente',
       fecha,
       visto_por: '',
