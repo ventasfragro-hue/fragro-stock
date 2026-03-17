@@ -728,9 +728,12 @@
             Venta: <strong id="subirCompVentaInfo" style="color:var(--text);"></strong>
           </div>
           <div style="margin-bottom:16px;">
-            <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Comprobante (imagen o PDF)</label>
-            <input type="file" id="subirCompFile" accept="image/*,.pdf" style="padding:8px;color:var(--text2);width:100%;">
-            <div id="subirCompPreview" style="margin-top:8px;"></div>
+            <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Comprobantes (imagen o PDF)</label>
+            <div id="subirCompListaFotos"></div>
+            <div id="subirCompNuevoInput" style="margin-top:6px;">
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">📎 Agregar foto / PDF</label>
+              <input type="file" id="subirCompFile" accept="image/*,.pdf" style="padding:8px;color:var(--text2);width:100%;">
+            </div>
           </div>
           <div style="display:flex;gap:10px;">
             <button class="btn-primary" onclick="confirmarSubirComp()" style="padding:11px 24px;">SUBIR Y ENVIAR A DANIEL</button>
@@ -2889,8 +2892,9 @@ async function eliminarComprobante(id) {
 // ===================== VENTAS PENDIENTES DE COBRO =====================
 let ventas = [];
 let currentSubirVentaId = null;
-let subirCompBase64 = '';
+let subirCompBase64 = ''; // legacy
 let subirCompFileName = '';
+let subirCompFotos = []; // array de fotos
 let ventaFiltroVendedor = 'todos';
 
 async function loadPedidos() {
@@ -2975,11 +2979,19 @@ function renderVentas(filtro) {
     // Comprobante preview
     let compHtml = '';
     if (v.comp_url) {
-      if (v.comp_url.startsWith('data:application/pdf') || v.comp_url.includes('pdf')) {
-        compHtml = `<div style="margin-top:10px;"><a href="${v.comp_url}" download="comprobante_${v.numero}.pdf" style="color:var(--accent);font-size:13px;">📄 Ver comprobante PDF</a></div>`;
-      } else {
-        compHtml = `<img src="${v.comp_url}" class="comp-img" onclick="openLightbox('${v.comp_url}')" title="Ver comprobante">`;
-      }
+      let fotosV = [];
+      try {
+        const p = JSON.parse(v.comp_url);
+        fotosV = Array.isArray(p) ? p : [v.comp_url];
+      } catch(e) { fotosV = [v.comp_url]; }
+      compHtml = '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;">'
+        + fotosV.map(f => {
+            if (f.startsWith('data:application/pdf') || f.includes('.pdf')) {
+              return '<div style="width:60px;height:60px;background:#1a1a1a;border:1px solid #333;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;" title="Ver PDF">📄</div>';
+            }
+            return '<img src="'+f+'" style="width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid #333;cursor:pointer;" onclick="openLightbox(this.src)" title="Ver comprobante">';
+          }).join('')
+        + '</div>';
     }
 
     // Actions
@@ -3081,28 +3093,43 @@ function openSubirCompModal(id) {
   const v = ventas.find(x => x.id === id);
   if (!v) return;
   currentSubirVentaId = id;
+  subirCompFotos = [];
   subirCompBase64 = '';
-  subirCompFileName = '';
   document.getElementById('subirCompVentaInfo').textContent = `#${v.numero} — ${v.cliente} — $${parseFloat(v.monto).toLocaleString('es-AR')}`;
   document.getElementById('subirCompFile').value = '';
-  document.getElementById('subirCompPreview').innerHTML = '';
+  actualizarListaFotosModal();
   document.getElementById('subirCompModal').classList.add('open');
 
   document.getElementById('subirCompFile').onchange = function(e) {
     const file = e.target.files[0];
     if (!file) return;
-    subirCompFileName = file.name;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-      subirCompBase64 = ev.target.result;
-      if (file.type.startsWith('image/')) {
-        document.getElementById('subirCompPreview').innerHTML = `<img src="${subirCompBase64}" style="max-width:200px;border-radius:8px;border:1px solid var(--border);margin-top:8px;">`;
-      } else {
-        document.getElementById('subirCompPreview').innerHTML = `<div style="margin-top:8px;color:#22c55e;font-size:13px;">✅ PDF cargado: ${file.name}</div>`;
-      }
-    };
-    reader.readAsDataURL(file);
+    comprimirImagen(file, 1200, 0.75).then(data64 => {
+      subirCompFotos.push(data64);
+      document.getElementById('subirCompFile').value = '';
+      actualizarListaFotosModal();
+    });
   };
+}
+
+function actualizarListaFotosModal() {
+  const lista = document.getElementById('subirCompListaFotos');
+  if (!lista) return;
+  lista.innerHTML = subirCompFotos.map((f, i) => {
+    const esPdf = f.startsWith('data:application/pdf');
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;background:#0a1a0a;border:1px solid rgba(57,255,20,0.2);border-radius:6px;padding:6px 10px;">'
+      + (esPdf
+        ? '<span style="font-size:20px;">📄</span><span style="font-size:12px;color:#39FF14;flex:1;">Archivo '+(i+1)+' cargado</span>'
+        : '<img src="'+f+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="openLightbox(this.src)"><span style="font-size:12px;color:#39FF14;flex:1;">Foto '+(i+1)+' cargada</span>')
+      + '<button onclick="quitarFotoModal('+i+')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;">✕</button>'
+      + '</div>';
+  }).join('');
+  const label = document.querySelector('#subirCompNuevoInput label');
+  if (label) label.textContent = subirCompFotos.length > 0 ? '📎 Agregar otra foto / PDF' : '📎 Agregar foto / PDF';
+}
+
+function quitarFotoModal(i) {
+  subirCompFotos.splice(i, 1);
+  actualizarListaFotosModal();
 }
 
 function closeSubirCompModal() {
@@ -3111,11 +3138,12 @@ function closeSubirCompModal() {
 }
 
 async function confirmarSubirComp() {
-  if (!subirCompBase64) { alert('Seleccioná un archivo primero.'); return; }
-  const res = await supaPatch('ventas', currentSubirVentaId, { estado: 'para_aprobar', comp_url: subirCompBase64 });
+  if (subirCompFotos.length === 0) { alert('Agregá al menos una foto o PDF.'); return; }
+  const compUrl = JSON.stringify(subirCompFotos);
+  const res = await supaPatch('ventas', currentSubirVentaId, { estado: 'para_aprobar', comp_url: compUrl });
   if (res) {
     const idx = ventas.findIndex(x => x.id === currentSubirVentaId);
-    if (idx >= 0) { ventas[idx].estado = 'para_aprobar'; ventas[idx].comp_url = subirCompBase64; }
+    if (idx >= 0) { ventas[idx].estado = 'para_aprobar'; ventas[idx].comp_url = compUrl; }
     updateNavVentas();
     closeSubirCompModal();
     renderVentas('todas');
