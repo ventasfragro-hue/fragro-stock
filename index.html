@@ -752,6 +752,15 @@
           <div style="margin:16px 0;font-size:14px;color:var(--text2);">
             Venta: <strong id="subirCompVentaInfo" style="color:var(--text);"></strong>
           </div>
+          <div style="margin-bottom:14px;">
+            <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:6px;">Forma de Pago</label>
+            <select id="subirCompTipo" style="width:100%;padding:9px 12px;background:#0a0a0a;border:1px solid #333;border-radius:8px;color:#fff;font-size:13px;font-family:'DM Sans',sans-serif;">
+              <option value="Transferencia">Transferencia</option>
+              <option value="Cheque">Cheque</option>
+              <option value="ECheq">ECheq</option>
+              <option value="Efectivo">Efectivo</option>
+            </select>
+          </div>
           <div style="margin-bottom:16px;">
             <label style="font-size:13px;color:var(--text2);display:block;margin-bottom:8px;">Comprobantes (imagen o PDF)</label>
             <div id="subirCompListaFotos"></div>
@@ -3314,6 +3323,8 @@ function openSubirCompModal(id) {
   subirCompFotos = [];
   subirCompBase64 = '';
   document.getElementById('subirCompVentaInfo').textContent = `#${v.numero} — ${v.cliente} — $${parseFloat(v.monto).toLocaleString('es-AR')}`;
+  const tipoSelect = document.getElementById('subirCompTipo');
+  if (tipoSelect && v.tipo) tipoSelect.value = v.tipo;
   document.getElementById('subirCompFile').value = '';
   actualizarListaFotosModal();
   document.getElementById('subirCompModal').classList.add('open');
@@ -3358,10 +3369,13 @@ function closeSubirCompModal() {
 async function confirmarSubirComp() {
   if (subirCompFotos.length === 0) { alert('Agregá al menos una foto o PDF.'); return; }
   const compUrl = JSON.stringify(subirCompFotos);
-  const res = await supaPatch('ventas', currentSubirVentaId, { estado: 'para_aprobar', comp_url: compUrl });
+  const nuevoTipo = document.getElementById('subirCompTipo')?.value || '';
+  const patchData = { estado: 'para_aprobar', comp_url: compUrl };
+  if (nuevoTipo) patchData.tipo = nuevoTipo;
+  const res = await supaPatch('ventas', currentSubirVentaId, patchData);
   if (res) {
     const idx = ventas.findIndex(x => x.id === currentSubirVentaId);
-    if (idx >= 0) { ventas[idx].estado = 'para_aprobar'; ventas[idx].comp_url = compUrl; }
+    if (idx >= 0) { ventas[idx].estado = 'para_aprobar'; ventas[idx].comp_url = compUrl; if (nuevoTipo) ventas[idx].tipo = nuevoTipo; }
     updateNavVentas();
     closeSubirCompModal();
     renderVentas('todas');
