@@ -650,7 +650,7 @@
       <!-- Tabs -->
       <div class="pedido-tabs" id="ventaTabs">
         <button class="tab-btn active" onclick="switchVentaTab('todas',this)">📋 Todas</button>
-        <button class="tab-btn" onclick="switchVentaTab('pendiente_cobro',this)">🟡 Pendiente de Cobro</button>
+        <button class="tab-btn" id="tabPendienteCobro" onclick="switchVentaTab('pendiente_cobro',this)">🟡 Pendiente de Cobro</button>
         <button class="tab-btn" onclick="switchVentaTab('para_aprobar',this)">🔴 Para Aprobar</button>
         <button class="tab-btn" onclick="switchVentaTab('cobrado',this)">🟢 Cobradas</button>
         <button class="tab-btn" onclick="switchVentaTab('comisiones_v',this)">📊 Comisiones</button>
@@ -1562,13 +1562,14 @@ function renderBannerDeudaVencida() {
 }
 
 function verVendasVencidas() {
-  // Ir al módulo de ventas y filtrar pendientes
-  const navItem = document.querySelector('[onclick*="ventas"]');
-  showView('ventas');
-  document.querySelectorAll('#view-ventas .tab-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('tabPendienteCobro');
-  if (btn) { btn.classList.add('active'); switchVentaTab('pendiente_cobro', btn); }
-  else renderVentas('pendiente_cobro');
+  const navItem = document.querySelector('.nav-item[onclick*="ventas"]');
+  if (navItem) showView('ventas', navItem);
+  else showView('ventas');
+  setTimeout(() => {
+    document.querySelectorAll('#view-ventas .tab-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('tabPendienteCobro');
+    if (btn) { btn.classList.add('active'); switchVentaTab('pendiente_cobro', btn); }
+  }, 50);
 }
 
 function renderGraficosDashboard() {
