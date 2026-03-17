@@ -348,23 +348,23 @@
         <!-- Ventas por mes -->
         <div style="background:var(--navy2);border:1px solid var(--border);border-radius:12px;padding:18px;">
           <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">📈 Ventas Cobradas por Mes</div>
-          <canvas id="chartVentasMes" height="160" style="width:100%;"></canvas>
+          <canvas id="chartVentasMes" height="160" style="width:100%;display:block;"></canvas>
         </div>
         <!-- Formas de pago -->
         <div style="background:var(--navy2);border:1px solid var(--border);border-radius:12px;padding:18px;">
           <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">🥧 Cobranzas por Forma de Pago</div>
-          <canvas id="chartFormasPago" height="160" style="width:100%;"></canvas>
+          <canvas id="chartFormasPago" height="160" style="width:100%;display:block;"></canvas>
           <div id="chartFormasPagoLegend" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;"></div>
         </div>
         <!-- Deuda pendiente -->
         <div style="background:var(--navy2);border:1px solid var(--border);border-radius:12px;padding:18px;">
           <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">💰 Deuda Pendiente de Cobro</div>
-          <canvas id="chartDeuda" height="160" style="width:100%;"></canvas>
+          <canvas id="chartDeuda" height="160" style="width:100%;display:block;"></canvas>
         </div>
         <!-- Comisiones por vendedor -->
         <div style="background:var(--navy2);border:1px solid var(--border);border-radius:12px;padding:18px;">
           <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">🏆 Comisiones por Vendedor (mes actual)</div>
-          <canvas id="chartComisiones" height="160" style="width:100%;"></canvas>
+          <canvas id="chartComisiones" height="160" style="width:100%;display:block;"></canvas>
         </div>
       </div>
 
@@ -1507,7 +1507,8 @@ function dibujarBarras(canvasId, labels, valores, colores, maxOverride) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.offsetWidth || 300;
+  canvas.style.width = '100%';
+  const W = canvas.parentElement ? (canvas.parentElement.clientWidth - 36) || 300 : 300;
   canvas.width = W;
   const H = canvas.height;
   ctx.clearRect(0, 0, W, H);
@@ -1616,7 +1617,8 @@ function renderChartDeuda() {
   const canvas = document.getElementById('chartDeuda');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.offsetWidth || 300;
+  canvas.style.width = '100%';
+  const W = canvas.parentElement ? (canvas.parentElement.clientWidth - 36) || 300 : 300;
   canvas.width = W;
   const H = canvas.height;
   ctx.clearRect(0, 0, W, H);
@@ -1757,7 +1759,7 @@ function renderDashboard() {
       </tr>`).join('');
 
   // Renderizar gráficos con pequeño delay para que el canvas tenga dimensiones
-  setTimeout(renderGraficosDashboard, 50);
+  setTimeout(renderGraficosDashboard, 300);
 }
 
 // STOCK
