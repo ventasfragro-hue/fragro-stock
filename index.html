@@ -1097,7 +1097,7 @@ async function syncDatos(silencioso = false) {
       supaGet('history', 'order=id.desc&limit=200'),
       supaGet('pedidos')
     ]);
-    const prevAlerts = products.filter(p=>p.stock<=p.min).length;
+    const prevAlerts = products.filter(p=>p.min>0&&p.stock<=p.min).length;
     products = (prods||[]).map(fromSupa);
     history  = (hist||[]).map(fromSupaHistory);
     pedidos  = (peds||[]).map(fromSupaPedido);
@@ -1108,7 +1108,7 @@ async function syncDatos(silencioso = false) {
     ]);
     comprobantes = comps||[];
     ventas = vents||[];
-    const newAlerts = products.filter(p=>p.stock<=p.min).length;
+    const newAlerts = products.filter(p=>p.min>0&&p.stock<=p.min).length;
     if (!silencioso && newAlerts > prevAlerts) showToast(`⚠️ Hay ${newAlerts} producto(s) con stock bajo`, 'error');
     renderAll();
     updateNavPedidos();
@@ -1331,7 +1331,7 @@ function renderAll() {
   // Alertas críticas
   const alertasEl = el('dashAlertas');
   if (alertasEl) {
-    const criticos = products.filter(p=>p.stock<=p.min);
+    const criticos = products.filter(p=>p.min>0&&p.stock<=p.min);
     if (criticos.length) {
       alertasEl.innerHTML = `<div style="background:rgba(255,59,59,0.08);border:1px solid rgba(255,59,59,0.25);border-radius:10px;padding:14px 18px;margin-bottom:4px;">
         <div style="font-size:12px;font-weight:700;color:#ff3b3b;margin-bottom:8px;">⚠️ ${criticos.length} PRODUCTO(S) CON STOCK CRÍTICO</div>
@@ -1358,7 +1358,7 @@ function renderAll() {
   renderHistory();
   // Update nav counts
   document.getElementById('navTotal').textContent = products.length;
-  const alertCount = products.filter(p=>p.stock<=p.min).length;
+  const alertCount = products.filter(p=>p.min>0&&p.stock<=p.min).length;
   document.getElementById('navAlerts').textContent = alertCount;
   // Mostrar Stock Inteligente solo para Daniel
   const navSmart = document.getElementById('navSmartStock');
@@ -1706,7 +1706,7 @@ function renderDashboard() {
   if(document.getElementById('statOut')) document.getElementById('statOut').textContent = out;
   if(document.getElementById('navAlerts')) document.getElementById('navAlerts').textContent = low + out;
 
-  const alerts = products.filter(p=>p.stock<=p.min);
+  const alerts = products.filter(p=>p.min>0&&p.stock<=p.min);
   const da = document.getElementById('dashAlerts');
   if (!da) return;
   if (alerts.length===0) {
@@ -1817,7 +1817,7 @@ function goPage(n) { currentPage=n; renderStock(); window.scrollTo(0,0); }
 
 // ALERTS
 function renderAlerts() {
-  const alerts = products.filter(p=>p.stock<=p.min).sort((a,b)=>a.stock-b.stock);
+  const alerts = products.filter(p=>p.min>0&&p.stock<=p.min).sort((a,b)=>a.stock-b.stock);
   document.getElementById('alertsList').innerHTML = alerts.length===0
     ? `<div class="empty"><div class="empty-icon">✅</div>Todo el stock está en orden</div>`
     : alerts.map(p=>{
