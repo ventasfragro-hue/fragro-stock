@@ -1125,6 +1125,7 @@ async function syncDatos(silencioso = false) {
     updateNavComprobantes();
     updateNavVentas();
     setTimeout(showNotificationBanner, 500);
+    setTimeout(renderBannerDeudaVencida, 700);
   } catch(e) {
     if (!silencioso) showToast('⚠️ No se pudo conectar a la nube', 'error');
   }
@@ -1202,6 +1203,7 @@ async function initApp() {
     updateNavComprobantes();
     updateNavVentas();
     setTimeout(showNotificationBanner, 1000);
+    setTimeout(renderBannerDeudaVencida, 1200);
   } catch(e) {
     loadBanner.style.borderColor = '#ff3b3b';
     loadBanner.style.color = '#ff3b3b';
@@ -1504,6 +1506,70 @@ function renderRanking() {
   }
 }
 
+
+
+function alertasDeudaVencida() {
+  const DIAS_LIMITE = 7;
+  const ahora = new Date();
+  ahora.setHours(0,0,0,0);
+
+  const vencidas = (ventas||[]).filter(v => {
+    if (v.estado !== 'pendiente_cobro') return false;
+    const p = (v.fecha||'').split('/');
+    if (p.length < 3) return false;
+    const fechaVenta = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    const dias = Math.floor((ahora - fechaVenta) / 86400000);
+    return dias >= DIAS_LIMITE;
+  }).map(v => {
+    const p = (v.fecha||'').split('/');
+    const fechaVenta = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+    const dias = Math.floor((ahora - fechaVenta) / 86400000);
+    return { ...v, diasVencida: dias };
+  }).sort((a,b) => b.diasVencida - a.diasVencida);
+
+  return vencidas;
+}
+
+function renderBannerDeudaVencida() {
+  const existing = document.getElementById('bannerDeudaVencida');
+  if (existing) existing.remove();
+
+  const vencidas = alertasDeudaVencida();
+  if (vencidas.length === 0) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'bannerDeudaVencida';
+  banner.style.cssText = 'position:fixed;top:'+(document.getElementById('notifBanner') ? '108' : '64')+'px;left:0;right:0;z-index:148;background:linear-gradient(90deg,#2a0a00,#3a1400,#2a0a00);border-bottom:2px solid #f59e0b;box-shadow:0 4px 24px rgba(245,158,11,0.2);padding:13px 24px;display:flex;align-items:center;justify-content:center;';
+
+  const masVieja = vencidas[0];
+  banner.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:900px;">'
+    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    + '<span style="font-size:20px;">🔴</span>'
+    + '<div>'
+    + '<div style="font-size:14px;font-weight:700;color:#f59e0b;">'
+    + vencidas.length + ' venta' + (vencidas.length>1?'s':'') + ' sin cobrar hace más de 7 días'
+    + '</div>'
+    + '<div style="font-size:12px;color:#fcd34d;margin-top:2px;">'
+    + 'La más antigua: ' + masVieja.cliente + ' — $' + parseFloat(masVieja.monto).toLocaleString('es-AR') + ' (' + masVieja.diasVencida + ' días)'
+    + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<button onclick="verVendasVencidas()" style="background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;cursor:pointer;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;letter-spacing:0.5px;white-space:nowrap;">VER DEUDAS</button>'
+    + '</div>';
+
+  document.body.insertBefore(banner, document.body.children[1]);
+}
+
+function verVendasVencidas() {
+  // Ir al módulo de ventas y filtrar pendientes
+  const navItem = document.querySelector('[onclick*="ventas"]');
+  showView('ventas');
+  document.querySelectorAll('#view-ventas .tab-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('tabPendienteCobro');
+  if (btn) { btn.classList.add('active'); switchVentaTab('pendiente_cobro', btn); }
+  else renderVentas('pendiente_cobro');
+}
 
 function renderGraficosDashboard() {
   renderChartVentasMes();
@@ -3168,6 +3234,23 @@ function filterVentaVendedor(vendedor, btn) {
 function renderVentas(filtro) {
   document.getElementById('ventaForm').style.display = 'none';
   document.getElementById('ventaLista').style.display = 'block';
+
+  // Banner de deudas vencidas dentro del módulo ventas
+  const bannerVentas = document.getElementById('bannerDeudaVentasModule');
+  const vencidas = alertasDeudaVencida();
+  if (vencidas.length > 0 && !bannerVentas) {
+    const bv = document.createElement('div');
+    bv.id = 'bannerDeudaVentasModule';
+    bv.style.cssText = 'background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:12px 16px;margin-bottom:16px;';
+    bv.innerHTML = '<div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:6px;">🔴 '+vencidas.length+' venta'+(vencidas.length>1?'s':'')+' sin cobrar hace más de 7 días</div>'
+      + vencidas.slice(0,3).map(v=>'<div style="font-size:12px;color:#fcd34d;padding:2px 0;">• '+v.cliente+' — $'+parseFloat(v.monto).toLocaleString('es-AR')+' ('+v.diasVencida+' días)</div>').join('')
+      + (vencidas.length>3?'<div style="font-size:11px;color:#a16207;margin-top:4px;">...y '+(vencidas.length-3)+' más</div>':'');
+    const ventaLista = document.getElementById('ventaLista');
+    if (ventaLista) ventaLista.insertBefore(bv, ventaLista.firstChild);
+  } else if (vencidas.length === 0 && bannerVentas) {
+    bannerVentas.remove();
+  }
+
   let lista = [...ventas];
   
   // Filtro por estado
