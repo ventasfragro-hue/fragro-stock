@@ -818,7 +818,11 @@
             <option>Del Prado</option>
           </select>
         </div>
-        <div class="form-group"><label>Fecha de Despacho</label><input type="date" id="dFecha"></div>
+        <div class="form-group">
+          <label>Fecha de Despacho <span style="font-size:11px;color:#f59e0b;">(Días: Lunes, Miércoles, Viernes)</span></label>
+          <input type="date" id="dFecha" onchange="validarFechaDespacho(this)">
+          <div id="dFechaAviso" style="font-size:11px;margin-top:4px;display:none;"></div>
+        </div>
         <div class="form-group"><label>Destinatario / Cliente</label><input type="text" id="dDestinatario" placeholder="Nombre del cliente o destino"></div>
         <div class="form-group"><label>Detalle del Envío</label><textarea id="dDetalle" rows="4" placeholder="Productos, cantidades, referencias..." style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:14px;resize:vertical;"></textarea></div>
         <div class="form-group"><label>Observaciones</label><input type="text" id="dObservaciones" placeholder="Instrucciones especiales, horarios, etc."></div>
@@ -1146,6 +1150,10 @@ function doLogin() {
     schBonusCount[user] = schBonusCount[user] || 0;
     initApp();
     setTimeout(() => mostrarSaludoBienvenida(user), 1200);
+    // Modo Depósito: ir directo a despachos
+    if (user === 'Depósito') {
+      setTimeout(() => activarModoDeposito(), 1500);
+    }
   } catch(e) { alert("Error login: " + e.message); }
 }
 
@@ -1570,6 +1578,104 @@ function verVendasVencidas() {
     const btn = document.getElementById('tabPendienteCobro');
     if (btn) { btn.classList.add('active'); switchVentaTab('pendiente_cobro', btn); }
   }, 50);
+}
+
+
+// ── DÍAS FIJOS DE DESPACHO (Lunes=1, Miércoles=3, Viernes=5) ──
+const DIAS_DESPACHO = [1, 3, 5]; // Lunes, Miércoles, Viernes
+
+function proximoDespacho() {
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  for (let i = 0; i <= 7; i++) {
+    const d = new Date(hoy);
+    d.setDate(hoy.getDate() + i);
+    if (DIAS_DESPACHO.includes(d.getDay())) return d;
+  }
+  return hoy;
+}
+
+function formatFechaDespacho(d) {
+  const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  return dias[d.getDay()] + ' ' + d.toLocaleDateString('es-AR');
+}
+
+function esDiaDeDespacho(fechaStr) {
+  // fechaStr: yyyy-mm-dd
+  if (!fechaStr) return true;
+  const d = new Date(fechaStr + 'T12:00:00');
+  return DIAS_DESPACHO.includes(d.getDay());
+}
+
+
+function activarModoDeposito() {
+  // Ocultar menú lateral excepto Despachos
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (!n.getAttribute('onclick') || !n.getAttribute('onclick').includes('despachos')) {
+      n.style.display = 'none';
+    }
+  });
+  // Mostrar próximo despacho en header
+  const prox = proximoDespacho();
+  const badge = document.createElement('div');
+  badge.id = 'proxDespachoHeader';
+  badge.style.cssText = 'background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);border-radius:8px;padding:6px 14px;font-size:12px;color:var(--accent);font-weight:600;';
+  badge.innerHTML = '📅 Próximo despacho: ' + formatFechaDespacho(prox);
+  const headerRight = document.querySelector('header');
+  if (headerRight) headerRight.appendChild(badge);
+  // Ir a despachos
+  const navDesp = document.querySelector('.nav-item[onclick*="despachos"]');
+  showView('despachos', navDesp);
+  // Auto-refresh cada 60 segundos para Depósito
+  if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+  autoRefreshInterval = setInterval(async () => {
+    const prevDesps = (despachos||[]).length;
+    const prevPend = (despachos||[]).filter(d=>d.estado==='pendiente').length;
+    const [newDesps] = await Promise.all([
+      supaGet('despachos', 'order=id.desc')
+    ]);
+    if (Array.isArray(newDesps)) {
+      const nuevasPend = newDesps.filter(d=>d.estado==='pendiente').length;
+      if (nuevasPend > prevPend) {
+        sonarAlertan();
+        mostrarAlertaNuevaOrden(nuevasPend - prevPend);
+      }
+      despachos = newDesps;
+      renderDespachos(filtroEstadoDespacho || 'todos');
+    }
+  }, 60000);
+}
+
+function sonarAlertan() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [440, 550, 660].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3);
+      osc.start(ctx.currentTime + i * 0.15);
+      osc.stop(ctx.currentTime + i * 0.15 + 0.3);
+    });
+  } catch(e) {}
+}
+
+function mostrarAlertaNuevaOrden(cantidad) {
+  const existing = document.getElementById('alertaNuevaOrden');
+  if (existing) existing.remove();
+  const alerta = document.createElement('div');
+  alerta.id = 'alertaNuevaOrden';
+  alerta.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:#0a2a0a;border:3px solid #39FF14;border-radius:16px;padding:32px 48px;text-align:center;box-shadow:0 0 60px rgba(57,255,20,0.4);animation:fadeUp 0.3s ease;';
+  alerta.innerHTML = '<div style="font-size:48px;margin-bottom:12px;">📦</div>'
+    + '<div style="font-size:22px;font-weight:700;color:#39FF14;margin-bottom:8px;">NUEVA ORDEN DE DESPACHO</div>'
+    + '<div style="font-size:16px;color:#a0e080;margin-bottom:20px;">'+cantidad+' orden'+(cantidad>1?'es':'')+' pendiente'+(cantidad>1?'s':'')+' de preparar</div>'
+    + '<button onclick="var el=document.getElementById(\'alertaNuevaOrden\');if(el)el.remove();" style="background:#39FF14;border:none;border-radius:8px;padding:10px 28px;font-size:15px;font-weight:700;cursor:pointer;color:#000;">✓ ENTENDIDO</button>';
+  document.body.appendChild(alerta);
+  // Auto-cerrar después de 10 segundos
+  setTimeout(() => { if (document.getElementById('alertaNuevaOrden')) document.getElementById('alertaNuevaOrden').remove(); }, 10000);
 }
 
 function renderGraficosDashboard() {
@@ -3888,6 +3994,22 @@ async function eliminarDespacho(id) {
     despachos = despachos.filter(d => d.id !== id);
     updateNavDespachos();
     renderDespachos('todos');
+  }
+}
+
+function validarFechaDespacho(input) {
+  const aviso = document.getElementById('dFechaAviso');
+  if (!aviso) return;
+  if (!input.value) { aviso.style.display='none'; return; }
+  const esDia = esDiaDeDespacho(input.value);
+  if (!esDia) {
+    aviso.style.display = 'block';
+    aviso.style.color = '#f59e0b';
+    aviso.textContent = '⚠️ Esta fecha no es un día de despacho. Los días habilitados son Lunes, Miércoles y Viernes.';
+  } else {
+    aviso.style.display = 'block';
+    aviso.style.color = '#39FF14';
+    aviso.textContent = '✅ Día de despacho válido.';
   }
 }
 
