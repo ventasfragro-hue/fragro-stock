@@ -1542,28 +1542,31 @@ function renderBannerDeudaVencida() {
   const existing = document.getElementById('bannerDeudaVencida');
   if (existing) existing.remove();
 
+  // No mostrar al usuario Depósito
+  if (currentUser === 'Depósito') return;
+
   const vencidas = alertasDeudaVencida();
   if (vencidas.length === 0) return;
 
   const banner = document.createElement('div');
   banner.id = 'bannerDeudaVencida';
-  banner.style.cssText = 'position:fixed;top:'+(document.getElementById('notifBanner') ? '108' : '64')+'px;left:0;right:0;z-index:148;background:linear-gradient(90deg,#2a0a00,#3a1400,#2a0a00);border-bottom:2px solid #f59e0b;box-shadow:0 4px 24px rgba(245,158,11,0.2);padding:13px 24px;display:flex;align-items:center;justify-content:center;';
+  // Banner compacto — una sola línea
+  banner.style.cssText = 'position:fixed;top:64px;left:0;right:0;z-index:148;background:#1a0a00;border-bottom:1px solid rgba(245,158,11,0.4);padding:6px 24px;display:flex;align-items:center;justify-content:center;';
 
   const masVieja = vencidas[0];
   banner.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;width:100%;max-width:900px;">'
-    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
-    + '<span style="font-size:20px;">🔴</span>'
-    + '<div>'
-    + '<div style="font-size:14px;font-weight:700;color:#f59e0b;">'
-    + vencidas.length + ' venta' + (vencidas.length>1?'s':'') + ' sin cobrar hace más de 7 días'
+    + '<div style="display:flex;align-items:center;gap:10px;">'
+    + '<span style="font-size:14px;">🔴</span>'
+    + '<span style="font-size:12px;color:#f59e0b;font-weight:600;">'
+    + vencidas.length + ' venta' + (vencidas.length>1?'s':'') + ' sin cobrar +7 días'
+    + '</span>'
+    + '<span style="font-size:11px;color:#a16207;">— ' + masVieja.cliente + ' (' + masVieja.diasVencida + ' días)</span>'
     + '</div>'
-    + '<div style="font-size:12px;color:#fcd34d;margin-top:2px;">'
-    + 'La más antigua: ' + masVieja.cliente + ' — $' + parseFloat(masVieja.monto).toLocaleString('es-AR') + ' (' + masVieja.diasVencida + ' días)'
+    + '<div style="display:flex;gap:8px;">'
+    + '<button onclick="verVendasVencidas()" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;cursor:pointer;font-size:11px;font-weight:600;padding:3px 10px;border-radius:5px;">VER</button>'
+    + '<button onclick="var b=document.getElementById(\'bannerDeudaVencida\');if(b)b.remove();" style="background:transparent;border:none;color:#666;cursor:pointer;font-size:14px;padding:0 4px;">✕</button>'
     + '</div>'
-    + '</div>'
-    + '</div>'
-    + '<button onclick="verVendasVencidas()" style="background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;cursor:pointer;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;letter-spacing:0.5px;white-space:nowrap;">VER DEUDAS</button>'
     + '</div>';
 
   document.body.insertBefore(banner, document.body.children[1]);
