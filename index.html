@@ -158,7 +158,92 @@
   .form-card { background:var(--navy2); border:1px solid var(--border); border-radius:12px; padding:28px; }
   .form-card h3 { font-family:'Bebas Neue',sans-serif; font-size:20px; letter-spacing:1px; margin-bottom:20px; color:var(--text2); }
 
-  @media(max-width:768px) { aside{display:none;} .content{padding:16px;} .form-grid{grid-template-columns:1fr;} }
+  /* ── RESPONSIVE MOBILE ── */
+  @media(max-width:768px) {
+    /* Header compacto */
+    header { padding:0 14px; height:56px; }
+    .logo { font-size:18px; letter-spacing:2px; }
+    .logo span { display:none; }
+    .logo img { height:28px !important; }
+    .user-badge { font-size:11px; padding:4px 8px; }
+
+    /* Ocultar sidebar lateral */
+    aside { display:none !important; }
+
+    /* Contenido ocupa todo */
+    .main { flex-direction:column; }
+    .content { padding:12px; padding-bottom:80px; }
+
+    /* Stats en 2 columnas */
+    .stats-row { grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+    .stat-card { padding:12px 14px; }
+    .stat-value { font-size:22px !important; }
+    .stat-label { font-size:11px; }
+
+    /* Tablas scroll horizontal */
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    table { min-width:500px; }
+    th, td { font-size:11px; padding:8px 10px; }
+
+    /* Formularios una columna */
+    .form-grid { grid-template-columns:1fr !important; }
+    .form-group.full { grid-column:1 !important; }
+
+    /* Toolbar wrap */
+    .toolbar { gap:8px; }
+    .search-wrap { min-width:100%; }
+    .filter-select { font-size:12px; }
+
+    /* Modales full screen en mobile */
+    .modal { width:95vw !important; max-width:95vw !important; max-height:90vh; overflow-y:auto; }
+
+    /* Página títulos */
+    .page-title { font-size:20px; }
+    .page-header { margin-bottom:14px; }
+
+    /* Grids de gráficos: 1 columna */
+    #dashGraficos { grid-template-columns:1fr !important; }
+
+    /* Comp cards */
+    .comp-grid { grid-template-columns:1fr !important; }
+    .comp-card { padding:14px; }
+
+    /* Tab buttons más chicos */
+    .tab-btn { font-size:11px; padding:6px 10px; }
+
+    /* Botones primarios full width en mobile */
+    .page-header .btn-primary { font-size:12px; padding:8px 14px; }
+
+    /* ── MENÚ INFERIOR MOBILE ── */
+    #mobileNav {
+      display:flex !important;
+      position:fixed;
+      bottom:0; left:0; right:0;
+      z-index:200;
+      background:rgba(10,10,10,0.98);
+      border-top:1px solid rgba(57,255,20,0.2);
+      backdrop-filter:blur(12px);
+      padding:8px 4px;
+      justify-content:space-around;
+      align-items:center;
+    }
+  }
+
+  #mobileNav { display:none; }
+  .mobile-nav-btn {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    padding:6px 10px; border-radius:8px; cursor:pointer;
+    font-size:9px; color:var(--text3); background:none; border:none;
+    font-family:'DM Sans',sans-serif; flex:1; max-width:60px;
+  }
+  .mobile-nav-btn.active { color:var(--accent); }
+  .mobile-nav-btn .mob-icon { font-size:18px; }
+  .mobile-nav-btn .mob-badge {
+    position:absolute; top:-2px; right:-2px;
+    background:#ef4444; color:#fff; border-radius:50%;
+    width:14px; height:14px; font-size:9px; display:flex;
+    align-items:center; justify-content:center; font-weight:700;
+  }
 
 
 
@@ -277,6 +362,36 @@
     <button onclick="doLogout()" style="padding:6px 12px;background:rgba(255,59,59,0.1);border:1px solid rgba(255,59,59,0.25);border-radius:8px;color:#ff3b3b;font-size:12px;cursor:pointer;font-weight:600;">🚪 Salir</button>
   </div>
 </header>
+
+  <!-- MENÚ INFERIOR MOBILE -->
+  <nav id="mobileNav">
+    <button class="mobile-nav-btn active" id="mobBtnDash" onclick="showView('dashboard',this);updateMobileNav('mobBtnDash')">
+      <span class="mob-icon">📊</span><span>Panel</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobBtnStock" onclick="showView('stock',this);updateMobileNav('mobBtnStock')">
+      <span class="mob-icon">📦</span><span>Stock</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobBtnVentas" onclick="showView('ventas',this);updateMobileNav('mobBtnVentas')">
+      <span class="mob-icon">📝</span><span>Ventas</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobBtnDespachos" onclick="showView('despachos',this);updateMobileNav('mobBtnDespachos')">
+      <span class="mob-icon">🚚</span><span>Despachos</span>
+    </button>
+    <button class="mobile-nav-btn" id="mobBtnMas" onclick="toggleMobileMenu()">
+      <span class="mob-icon">☰</span><span>Más</span>
+    </button>
+  </nav>
+
+  <div id="mobileMenuExtra" style="display:none;position:fixed;bottom:70px;left:0;right:0;z-index:199;background:rgba(10,10,10,0.98);border-top:1px solid rgba(57,255,20,0.2);padding:12px;backdrop-filter:blur(12px);">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <button onclick="showView('alerts');toggleMobileMenu();updateMobileNav('')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 8px;color:var(--text2);font-size:12px;cursor:pointer;text-align:center;">⚠️<br>Alertas</button>
+      <button onclick="showView('history');toggleMobileMenu();updateMobileNav('')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 8px;color:var(--text2);font-size:12px;cursor:pointer;text-align:center;">🕓<br>Historial</button>
+      <button onclick="showView('pedidos');toggleMobileMenu();updateMobileNav('')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 8px;color:var(--text2);font-size:12px;cursor:pointer;text-align:center;">📋<br>Pedidos</button>
+      <button onclick="showView('comprobantes');toggleMobileMenu();updateMobileNav('')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 8px;color:var(--text2);font-size:12px;cursor:pointer;text-align:center;">💰<br>Cobros</button>
+      <button onclick="showView('ranking');toggleMobileMenu();updateMobileNav('')" style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 8px;color:var(--text2);font-size:12px;cursor:pointer;text-align:center;">🏆<br>Ranking</button>
+      <button onclick="doLogout();toggleMobileMenu()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px 8px;color:#ef4444;font-size:12px;cursor:pointer;text-align:center;">🚪<br>Salir</button>
+    </div>
+  </div>
 
 <div class="main">
   <aside>
@@ -1158,6 +1273,24 @@ function doLogin() {
       setTimeout(() => activarModoDeposito(), 1500);
     }
   } catch(e) { alert("Error login: " + e.message); }
+}
+
+
+function updateMobileNav(activeId) {
+  document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
+  if (activeId) {
+    const btn = document.getElementById(activeId);
+    if (btn) btn.classList.add('active');
+  }
+  // Cerrar menú extra si estaba abierto
+  const extra = document.getElementById('mobileMenuExtra');
+  if (extra) extra.style.display = 'none';
+}
+
+function toggleMobileMenu() {
+  const extra = document.getElementById('mobileMenuExtra');
+  if (!extra) return;
+  extra.style.display = extra.style.display === 'none' ? 'block' : 'none';
 }
 
 function doLogout() {
