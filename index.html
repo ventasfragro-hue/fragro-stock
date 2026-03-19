@@ -230,6 +230,32 @@
   }
 
   #mobileNav { display:none; }
+
+  /* Botón flotante acción rápida mobile */
+  .fab-mobile {
+    display:none;
+  }
+  @media(max-width:768px) {
+    .fab-mobile {
+      display:flex;
+      position:fixed;
+      bottom:80px;
+      right:16px;
+      z-index:190;
+      width:52px;
+      height:52px;
+      background:var(--accent);
+      color:#000;
+      border:none;
+      border-radius:50%;
+      font-size:26px;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-shadow:0 0 20px rgba(57,255,20,0.4);
+      font-weight:700;
+    }
+  }
   .mobile-nav-btn {
     display:flex; flex-direction:column; align-items:center; gap:2px;
     padding:6px 10px; border-radius:8px; cursor:pointer;
@@ -1276,6 +1302,48 @@ function doLogin() {
 }
 
 
+
+function fabAction() {
+  // Detectar vista activa y ejecutar acción correspondiente
+  const activeView = document.querySelector('.view.active');
+  if (!activeView) return;
+  const id = activeView.id;
+  if (id === 'view-ventas') {
+    showVentaForm();
+  } else if (id === 'view-comprobantes') {
+    showCompForm();
+  } else if (id === 'view-despachos') {
+    if (currentUser !== 'Depósito') {
+      document.getElementById('formNuevoDespacho').style.display = 'block';
+      abrirFormDespacho();
+    }
+  } else if (id === 'view-stock') {
+    showView('addProduct');
+  } else if (id === 'view-pedidos') {
+    showPedidoForm();
+  } else {
+    // Por defecto ir a ventas
+    showView('ventas');
+    updateMobileNav('mobBtnVentas');
+    setTimeout(showVentaForm, 100);
+  }
+}
+
+// Actualizar ícono del FAB según vista activa
+function updateFab(viewName) {
+  const fab = document.getElementById('fabMobile');
+  if (!fab) return;
+  const icons = {
+    'ventas': '+',
+    'comprobantes': '+',
+    'despachos': '+',
+    'stock': '+',
+    'pedidos': '+',
+  };
+  fab.style.display = icons[viewName] !== undefined ? '' : 'none';
+  fab.textContent = icons[viewName] || '+';
+}
+
 function updateMobileNav(activeId) {
   document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   if (activeId) {
@@ -1417,6 +1485,7 @@ function showView(name, el) {
   document.getElementById('view-'+name).classList.add('active');
   if (el) el.classList.add('active');
   currentPage = 1;
+  updateFab(name);
   if (name==='stock') renderStock();
   if (name==='dashboard') renderDashboard();
   if (name==='alerts') renderAlerts();
@@ -4187,6 +4256,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.q
     <button onclick="cerrarSchBonus()" style="padding:12px 36px;background:#fb923c;color:#000;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;">¡A seguir vendiendo! 🚀</button>
   </div>
 </div>
+
+  <!-- BOTÓN FLOTANTE MOBILE -->
+  <button class="fab-mobile" id="fabMobile" onclick="fabAction()" title="Acción rápida">+</button>
 
 </body>
 </html>
