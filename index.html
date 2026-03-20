@@ -883,6 +883,53 @@
               <input type="text" id="ventaNota" placeholder="Descripción de la venta...">
             </div>
           </div>
+
+          <!-- SECCIÓN DESPACHO -->
+          <div style="margin-top:24px;border-top:1px solid rgba(57,255,20,0.15);padding-top:20px;">
+            <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:16px;">🚚 Despacho (opcional)</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Transporte</label>
+                <select id="ventaTransporte">
+                  <option value="">Sin despacho por ahora</option>
+                  <optgroup label="Transportistas">
+                    <option value="Credifin">Credifin</option>
+                    <option value="Cingolani">Cingolani</option>
+                    <option value="Vía Cargo">Vía Cargo</option>
+                    <option value="Cotrap">Cotrap</option>
+                    <option value="Del Prado">Del Prado</option>
+                  </optgroup>
+                  <optgroup label="Logística Propia">
+                    <option value="Facundo — Zona propia">Facundo — Zona propia</option>
+                    <option value="Ignacio — Zona propia">Ignacio — Zona propia</option>
+                    <option value="Dario — Zona propia">Dario — Zona propia</option>
+                  </optgroup>
+                  <optgroup label="Otro">
+                    <option value="__otro__">Otro (escribir abajo)</option>
+                  </optgroup>
+                </select>
+              </div>
+              <div class="form-group" id="ventaTransporteOtroWrap" style="display:none;">
+                <label>Nombre del transportista</label>
+                <input type="text" id="ventaTransporteOtro" placeholder="Ej: Transporte López">
+              </div>
+              <div class="form-group">
+                <label>Fecha de Despacho <span style="font-size:11px;color:#f59e0b;">(Lun/Mié/Vie)</span></label>
+                <input type="date" id="ventaFechaDespacho" onchange="validarFechaDespacho(this)">
+                <div id="ventaFechaAviso" style="font-size:11px;margin-top:4px;display:none;"></div>
+              </div>
+              <div class="form-group full">
+                <label>📎 Presupuesto PDF (Dux) — genera el checklist automáticamente</label>
+                <input type="file" id="ventaPdfDux" accept="application/pdf" onchange="leerPdfDuxVenta(this)" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
+                <div id="ventaPdfStatus" style="margin-top:4px;font-size:12px;display:none;"></div>
+              </div>
+              <div class="form-group full">
+                <label>📋 Checklist de armado</label>
+                <textarea id="ventaChecklist" rows="4" placeholder="Se completa automáticamente al subir el PDF de Dux, o escribí manualmente uno por línea..." style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;resize:vertical;"></textarea>
+              </div>
+            </div>
+          </div>
+
           <div style="display:flex;gap:10px;margin-top:20px;">
             <button class="btn-primary" onclick="guardarVenta()" style="padding:12px 28px;">REGISTRAR VENTA</button>
             <button onclick="cancelVentaForm()" style="padding:12px 20px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;">Cancelar</button>
@@ -3692,6 +3739,55 @@ function toggleVentaSCH() {
   }
 }
 
+
+// Mostrar campo "otro" transporte en formulario de venta
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.id === 'ventaTransporte') {
+    const wrap = document.getElementById('ventaTransporteOtroWrap');
+    const fechaEl = document.getElementById('ventaFechaDespacho');
+    if (wrap) wrap.style.display = e.target.value === '__otro__' ? 'block' : 'none';
+    // Preseleccionar próxima fecha de despacho si no hay una
+    if (e.target.value && e.target.value !== '' && fechaEl && !fechaEl.value) {
+      const prox = proximoDespacho();
+      fechaEl.value = prox.getFullYear()+'-'+String(prox.getMonth()+1).padStart(2,'0')+'-'+String(prox.getDate()).padStart(2,'0');
+    }
+  }
+});
+
+// Leer PDF Dux desde el formulario de venta
+async function leerPdfDuxVenta(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('ventaPdfStatus');
+  const checklistEl = document.getElementById('ventaChecklist');
+  if (status) { status.style.display='block'; status.style.color='#f59e0b'; status.textContent='⏳ Leyendo PDF...'; }
+
+  if (typeof pdfjsLib === 'undefined') {
+    if (status) { status.style.color='#f59e0b'; status.textContent='⚠️ Escribí los ítems manualmente.'; }
+    return;
+  }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let textoCompleto = '';
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const ct = await page.getTextContent();
+      textoCompleto += ct.items.map(i=>i.str).join(' ') + '\n';
+    }
+    const items = extraerItemsDux(textoCompleto);
+    if (items.length > 0) {
+      checklistEl.value = items.join('\n');
+      if (status) { status.style.color='#39FF14'; status.textContent='✅ '+items.length+' ítem'+(items.length>1?'s':'')+' detectado'+(items.length>1?'s':'')+' automáticamente'; }
+    } else {
+      if (status) { status.style.color='#f59e0b'; status.textContent='⚠️ No se detectaron ítems. Escribilos manualmente.'; }
+    }
+  } catch(e) {
+    if (status) { status.style.color='#ef4444'; status.textContent='❌ Error: '+e.message; }
+  }
+}
+
 async function guardarVenta() {
   if (!isVendedor()) return;
   const numero = document.getElementById('ventaNumero').value.trim();
@@ -3706,6 +3802,12 @@ async function guardarVenta() {
     alert('Completá número, cliente y monto correctamente.'); return;
   }
 
+  // Datos de despacho opcionales
+  let transporte = document.getElementById('ventaTransporte')?.value || '';
+  if (transporte === '__otro__') transporte = document.getElementById('ventaTransporteOtro')?.value.trim() || '';
+  const fechaDespacho = document.getElementById('ventaFechaDespacho')?.value || '';
+  const checklistRaw = document.getElementById('ventaChecklist')?.value.trim() || '';
+
   const id = Date.now();
   const fecha = new Date().toLocaleDateString('es-AR');
   const nueva = { id, numero, cliente, monto, tipo, nota: nota||'', vendedor: currentUser, estado: 'pendiente_cobro', fecha, tiene_iva: tieneIVA, comp_url: '', aprobado_por: '', fecha_aprobacion: '' };
@@ -3714,11 +3816,41 @@ async function guardarVenta() {
   if (res) {
     ventas.unshift(nueva);
     updateNavVentas();
+
+    // Crear despacho automáticamente si se eligió transporte
+    if (transporte && fechaDespacho) {
+      const checklistItems = checklistRaw
+        ? checklistRaw.split('\n').map(l=>l.trim()).filter(Boolean).map(t=>({texto:t, tildado:false}))
+        : [];
+      const nuevoDespacho = {
+        id: Date.now() + 1,
+        transporte,
+        fecha_despacho: fechaDespacho,
+        destinatario: cliente,
+        detalle: 'Venta #' + numero + (nota ? ' — ' + nota : ''),
+        observaciones: '',
+        estado: 'pendiente',
+        creado_por: currentUser,
+        presupuesto_pdf: '',
+        checklist: checklistItems.length ? JSON.stringify(checklistItems) : '',
+        checklist_confirmado: false,
+        confirmado_por: ''
+      };
+      await supaPost('despachos', [nuevoDespacho]);
+      despachos.unshift(nuevoDespacho);
+      updateNavDespachos();
+    }
+
     cancelVentaForm();
     renderVentas('todas');
     checkPrimeraVenta(currentUser);
     if (numero.startsWith('SCH-')) setTimeout(() => mostrarBonusSCH(currentUser), 800);
-    else alert('✅ Venta registrada. Cuando cobres, subí el comprobante.');
+    else {
+      const msg = transporte
+        ? '✅ Venta registrada y orden de despacho creada para ' + transporte + '.'
+        : '✅ Venta registrada. Cuando cobres, subí el comprobante.';
+      alert(msg);
+    }
   } else {
     alert('Error al guardar. Revisá la conexión.');
   }
