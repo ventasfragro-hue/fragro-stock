@@ -4435,57 +4435,49 @@ async function leerPdfDux(input) {
 function extraerItemsDux(texto) {
   const items = [];
 
-  // Formato exacto Dux confirmado:
-  // CODIGO DESC... CANT,CC PRECIO_UNI.PP,CC 0,00 SUBTOTAL.PP,CC 21,00 SUBTOTAL_IVA.PP,CC
-  // Ejemplo: "68500 PUNTAS - Ø 2" - 6/8... 2,00 88.717,88 0,00 177.435,76 21,00 214.697,27"
-  // Clave: CANTIDAD siempre es X,00 o X,YY seguida de PRECIO que tiene puntos de miles: XX.XXX,XX
+  // El texto de PDF.js llega todo junto en una sola cadena.
+  // Formato confirmado Dux:
+  // ...encabezado... Codigo Descripcion Cant. ... CODIGO DESC CANT,CC PRECIO,CC 0,00 SUB,CC 21,00 TOTAL,CC CODIGO2...
+  // Ancla MÁS CONFIABLE: cada producto termina en "0,00 [SUBTOTAL] 21,00 [TOTAL_IVA]"
 
-  // Extraer el bloque de productos (entre columnas y subtotal)
-  const bloqueMatch = texto.match(/Codigo\s+Descripcion\s+Cant[\s\S]*?(?=SUBTOTAL|Subtotal|subtotal|\$\s*[\d])/i);
-  const bloque = bloqueMatch ? bloqueMatch[0] : texto;
+  // Paso 1: cortar todo lo que está antes de "Codigo Descripcion"
+  const corte = texto.search(/Codigo\s+Descripcion\s+Cant/i);
+  const bloque = corte >= 0 ? texto.substring(corte) : texto;
 
-  // Patrón principal: código + descripción + cantidad(,) + precio_con_puntos(,)
-  // Código puede ser: números, letras, guiones, barras (ej: 68500, MC-155377, TT4139)
-  // Descripción: cualquier texto incluyendo Ø, ", /, paréntesis, guiones
-  // Cantidad: 1-4 dígitos + coma + 2 dígitos (ej: 2,00 o 1,60)
-  // Precio unitario: tiene puntos de miles (ej: 88.717,88 o 38.433,00)
-  const patron = /([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+(.*?)\s+(\d{1,4},\d{2})\s+(\d{1,3}\.\d{3},\d{2}|\d{1,6},\d{2})\s+0,00/g;
+  // Paso 2: cortar hasta el primer SUBTOTAL (fin de productos)
+  const finIdx = bloque.search(/SUBTOTAL:\s*\$/i);
+  const bloqueProductos = finIdx > 0 ? bloque.substring(0, finIdx) : bloque;
 
-  let match;
-  while ((match = patron.exec(bloque)) !== null) {
-    const codigo = match[1].trim();
-    let desc = match[2].trim().replace(/\s+/g, ' ');
-    const cantStr = match[3];
+  // Paso 3: partir en ítems usando "0,00 [número] 21,00" como separador de fin de línea
+  // Cada ítem tiene: CODIGO DESCRIPCION CANT,CC PRECIO,CC 0,00 SUBTOTAL,CC 21,00 TOTAL_IVA,CC
+  const segmentos = bloqueProductos.split(/\s+21,00\s+[\d\.]+,\d{2}/);
+
+  for (let i = 0; i < segmentos.length - 1; i++) {
+    const seg = segmentos[i].trim();
+    if (!seg) continue;
+
+    // Buscar el último patrón CODIGO + DESC + CANT,CC + PRECIO,CC + 0,00 en el segmento
+    // El código está al final del segmento anterior o al inicio del actual
+    const m = seg.match(/([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+(.*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s*$/);
+    if (!m) continue;
+
+    const codigo = m[1].trim();
+    let desc = m[2].trim().replace(/\s+/g,' ');
+    const cantStr = m[3];
     const cantNum = parseFloat(cantStr.replace(',','.'));
 
-    // Filtrar encabezados y basura
-    if (/^(codigo|descripcion|cant|precio|subtotal|total|iva|fecha|vendedor|sub)/i.test(desc)) continue;
-    if (/^(sub total|subtotal)/i.test(desc)) continue;
-    if (cantNum <= 0 || cantNum > 9999) continue;
+    // Filtros
+    if (cantNum <= 0 || cantNum > 999) continue;
     if (desc.length < 3) continue;
+    if (/^(codigo|descripcion|cant|precio|subtotal|total|iva|fecha|vendedor|sub total)/i.test(desc)) continue;
 
-    // Limpiar descripción: quitar peso final tipo "(8,2 KG)" o "(28,4 KG) -"
-    desc = desc.replace(/\s*\(\d+[,\.]\d+\s*KG\)\s*-?\s*$/i, '').trim();
+    // Limpiar descripción: quitar peso final "(8,2 KG)" o "(10 KG) -"
+    desc = desc.replace(/\s*\([\d,\.]+\s*KG(?:\/EJE)?\)\s*(?:\([\d]+\s*AGUJEROS\))?\s*-?\s*$/i,'').trim();
+    desc = desc.replace(/\s*\([\d]+\s*AGUJEROS\)\s*-?\s*$/i,'').trim();
     desc = desc.replace(/\s*-\s*$/, '').trim();
 
-    // Formatear cantidad
     const cantDisplay = cantNum === Math.floor(cantNum) ? String(Math.floor(cantNum)) : cantStr.replace(',','.');
     items.push(cantDisplay + 'x ' + desc + ' [' + codigo + ']');
-  }
-
-  // Fallback: si no encontró nada con el patrón de precio con puntos,
-  // intentar patrón más simple buscando CODIGO + DESCRIPCION + CANTIDAD,00
-  if (items.length === 0) {
-    const patron2 = /([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+(.*?)\s+(\d{1,3}),00\s+[\d]/g;
-    while ((match = patron2.exec(bloque)) !== null) {
-      const codigo = match[1].trim();
-      let desc = match[2].trim().replace(/\s+/g,' ');
-      const cant = parseInt(match[3]);
-      if (/^(codigo|descripcion|cant|subtotal|total|iva|sub)/i.test(desc)) continue;
-      if (cant <= 0 || cant > 999 || desc.length < 3) continue;
-      desc = desc.replace(/\s*\(\d+[,\.]\d+\s*KG\)\s*-?\s*$/i,'').replace(/\s*-\s*$/,'').trim();
-      items.push(cant + 'x ' + desc + ' [' + codigo + ']');
-    }
   }
 
   return [...new Set(items)].slice(0, 50);
