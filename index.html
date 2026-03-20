@@ -835,7 +835,16 @@
       <!-- Formulario nueva venta -->
       <div id="ventaForm" style="display:none;">
         <div class="form-card" style="max-width:560px;">
-          <div style="font-size:15px;font-weight:600;margin-bottom:20px;">📝 Registrar Nueva Venta</div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:16px;">📝 Registrar Nueva Venta</div>
+
+          <!-- PDF DUX — va primero para autocompletar -->
+          <div style="background:rgba(57,255,20,0.05);border:1px solid rgba(57,255,20,0.2);border-radius:10px;padding:14px;margin-bottom:18px;">
+            <label style="font-size:13px;font-weight:600;color:var(--accent);display:block;margin-bottom:6px;">⚡ Autocompletar desde PDF Dux</label>
+            <input type="file" id="ventaPdfDuxTop" accept="application/pdf" onchange="leerPdfDuxVenta(this)" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
+            <div id="ventaPdfStatusTop" style="margin-top:6px;font-size:12px;display:none;"></div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px;">Subí el presupuesto de Dux y se completan automáticamente número, cliente, monto e ítems</div>
+          </div>
+
           <div class="form-grid">
             <div class="form-group">
               <label>Número de Venta (4 dígitos)</label>
@@ -3761,8 +3770,11 @@ async function leerPdfDuxVenta(input) {
   // Reutiliza la misma lógica de leerPdfDux pero con elementos de ventas
   const file = input.files[0];
   if (!file) return;
-  const status = document.getElementById('ventaPdfStatus');
+  // Soporta tanto el input del top como el de abajo
+  const isTop = input.id === 'ventaPdfDuxTop';
+  const status = document.getElementById(isTop ? 'ventaPdfStatusTop' : 'ventaPdfStatus');
   const checklistEl = document.getElementById('ventaChecklist');
+  if (status) status.style.display = 'block';
 
   if (file.type !== 'application/pdf') {
     if (status) { status.style.display='block'; status.style.color='#aaa'; status.textContent='Imagen cargada.'; }
@@ -3793,11 +3805,68 @@ async function leerPdfDuxVenta(input) {
       textoCompleto += ct.items.map(i=>i.str).join(' ') + '\n';
     }
     const items = extraerItemsDux(textoCompleto);
+
+    // ── AUTOCOMPLETAR FORMULARIO DESDE PDF DUX ──
+    const autocompletado = [];
+
+    // Número de presupuesto: "Nº 00007215" o "Nº 7215"
+    const numMatch = textoCompleto.match(/N[oº°]\s*0*(\d{4,})/i);
+    if (numMatch) {
+      const numEl = document.getElementById('ventaNumero');
+      if (numEl && !numEl.value) {
+        numEl.value = numMatch[1];
+        autocompletado.push('Nº ' + numMatch[1]);
+      }
+    }
+
+    // Cliente: "SEÑOR/ES: NOMBRE APELLIDO"
+    const clienteMatch = textoCompleto.match(/SE[ÑN]OR\/ES:\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,\.]{3,60?}?)(?:\s{2,}|IVA:|CUIT:|$)/i);
+    if (clienteMatch) {
+      const clienteEl = document.getElementById('ventaCliente');
+      const nombreCliente = clienteMatch[1].trim().replace(/\s+/g,' ');
+      if (clienteEl && !clienteEl.value && nombreCliente.length > 2) {
+        clienteEl.value = nombreCliente;
+        autocompletado.push('Cliente: ' + nombreCliente);
+      }
+    }
+
+    // Monto total: "TOTAL: $ 968.000,00"
+    const totalMatch = textoCompleto.match(/TOTAL:\s*\$\s*([\d\.]+,\d{2})/i);
+    if (totalMatch) {
+      const montoEl = document.getElementById('ventaMonto');
+      if (montoEl && !montoEl.value) {
+        // Convertir "968.000,00" → "968000"
+        const monto = totalMatch[1].replace(/\./g,'').replace(',','.');
+        montoEl.value = String(Math.round(parseFloat(monto)));
+        autocompletado.push('Total: $' + totalMatch[1]);
+      }
+    }
+
+    // IVA: si dice "RESPONSABLE INSCRIPTO" tiene IVA, "CONSUMIDOR FINAL" también
+    // Si dice "EXENTO" → sin IVA
+    const sinIVAEl = document.getElementById('ventaSinIVA');
+    const conIVAEl = document.getElementById('ventaConIVA');
+    if (textoCompleto.match(/EXENTO/i) && sinIVAEl) {
+      sinIVAEl.checked = true;
+      autocompletado.push('IVA: No incluye');
+    } else if (conIVAEl) {
+      conIVAEl.checked = true;
+    }
+
+    // Mostrar resultado
     if (items.length > 0) {
       if (checklistEl) checklistEl.value = items.join('\n');
-      if (status) { status.style.color='#39FF14'; status.textContent='✅ '+items.length+' ítem'+(items.length>1?'s':'')+' detectado'+(items.length>1?'s':'')+' automáticamente'; }
-    } else {
-      if (status) { status.innerHTML = '⚠️ No se detectaron ítems. <details style="margin-top:4px;"><summary style="cursor:pointer;color:#60a5fa;font-size:11px;">Ver texto extraído</summary><pre style="font-size:10px;color:#aaa;white-space:pre-wrap;max-height:150px;overflow:auto;background:#0a0a0a;padding:6px;border-radius:4px;margin-top:4px;">' + textoCompleto.substring(0,1500).replace(/</g,'&lt;') + '</pre></details>'; }
+    }
+
+    const camposAuto = autocompletado.length > 0 ? ' — Completé: ' + autocompletado.join(', ') : '';
+    if (status) {
+      if (items.length > 0) {
+        status.style.color = '#39FF14';
+        status.textContent = '✅ '+items.length+' ítem'+(items.length>1?'s':'')+' detectado'+(items.length>1?'s':'')+' automáticamente'+camposAuto;
+      } else {
+        status.style.color = '#f59e0b';
+        status.innerHTML = '⚠️ No se detectaron ítems.'+(camposAuto ? '<br><span style="color:#39FF14;font-size:11px;">'+camposAuto+'</span>' : '')+' <details style="margin-top:4px;display:inline;"><summary style="cursor:pointer;color:#60a5fa;font-size:11px;">Ver texto extraído</summary><pre style="font-size:10px;color:#aaa;white-space:pre-wrap;max-height:150px;overflow:auto;background:#0a0a0a;padding:6px;border-radius:4px;margin-top:4px;">' + textoCompleto.substring(0,1500).replace(/</g,'&lt;') + '</pre></details>';
+      }
     }
   } catch(e) {
     if (status) { status.style.color='#ef4444'; status.textContent='❌ Error: '+e.message; }
