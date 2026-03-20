@@ -3836,8 +3836,26 @@ async function guardarVenta() {
           await supaPost('history', [{ id: Date.now() + Math.random(), fecha: new Date().toLocaleString('es-AR'), descripcion: prod.desc, rubro: prod.rubro, tipo: 'sale', qty: cant, prev_stock: prod.stock, new_stock: newStock, usuario: currentUser, note: 'Venta #'+numero+' — '+cliente }]);
           prod.stock = newStock;
           itemsDescontados.push(cant + 'x ' + prod.desc);
-        } else {
-          itemsSinStock.push(codigo);
+        } else if (codigo && codigo !== '-') {
+          // Producto no existe — crearlo automáticamente con datos del PDF
+          const descLinea = linea.replace(/^\d+(?:\.\d+)?x\s+/, '').replace(/\s*\[[^\]]+\]$/, '').trim();
+          const newProd = {
+            id: Date.now() + Math.floor(Math.random()*9999),
+            code: codigo,
+            descripcion: descLinea,
+            rubro: '⚠️ Sin clasificar',
+            stock: -cant, // negativo indica que se vendió sin stock previo
+            min: 0,
+            peso_kg: null
+          };
+          const resNew = await supaPost('products', [newProd]);
+          if (resNew && !resNew.error) {
+            products.push({ id: newProd.id, code: newProd.code, desc: newProd.descripcion, rubro: newProd.rubro, stock: newProd.stock, min: 0 });
+            await supaPost('history', [{ id: Date.now() + Math.random(), fecha: new Date().toLocaleString('es-AR'), descripcion: descLinea, rubro: '⚠️ Sin clasificar', tipo: 'sale', qty: cant, prev_stock: 0, new_stock: -cant, usuario: currentUser, note: 'Venta #'+numero+' — '+cliente+' (producto creado automáticamente)' }]);
+            itemsDescontados.push(cant + 'x ' + descLinea + ' ⚠️ nuevo');
+          } else {
+            itemsSinStock.push(codigo);
+          }
         }
       }
       if (itemsDescontados.length > 0) updateNavAlerts();
