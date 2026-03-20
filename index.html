@@ -4506,7 +4506,10 @@ function extraerItemsDux(texto) {
   // Partir por "21,00 [TOTAL_IVA]" — cada producto termina con el IVA 21%
   const segmentos = bloque.split(/\s+21,00\s+[\d\.]+,\d{2}/);
 
-  for (let i = 0; i < segmentos.length - 1; i++) {
+  // Incluir todos los segmentos excepto el último (que es texto post-IVA o vacío)
+  // Pero si solo hay 2 segmentos el producto está en seg[0]
+  const maxSeg = segmentos.length <= 2 ? segmentos.length : segmentos.length - 1;
+  for (let i = 0; i < maxSeg; i++) {
     const seg = segmentos[i];
     // Split por 3+ espacios para separar: [basura+CODIGO] [DESCRIPCION] [CANT...] [PRECIO] [0,00] [SUBTOTAL]
     const parts = seg.split(/\s{3,}/);
