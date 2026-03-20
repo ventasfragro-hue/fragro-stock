@@ -3817,6 +3817,32 @@ async function guardarVenta() {
     ventas.unshift(nueva);
     updateNavVentas();
 
+    // Descontar stock automáticamente desde el checklist del PDF
+    const itemsDescontados = [];
+    const itemsSinStock = [];
+    if (checklistRaw) {
+      const lineas = checklistRaw.split('\n').map(l=>l.trim()).filter(Boolean);
+      for (const linea of lineas) {
+        // Formato: "2x DESCRIPCION [CODIGO]"
+        const m = linea.match(/^(\d+(?:\.\d+)?)x\s+.+\[([^\]]+)\]$/);
+        if (!m) continue;
+        const cant = parseFloat(m[1]);
+        const codigo = m[2].trim();
+        if (!codigo || codigo === '-' || isNaN(cant)) continue;
+        const prod = products.find(p => p.code.trim().toLowerCase() === codigo.toLowerCase());
+        if (prod) {
+          const newStock = Math.max(0, prod.stock - cant);
+          await supaPatch('products', prod.id, { stock: newStock });
+          await supaPost('history', [{ id: Date.now() + Math.random(), fecha: new Date().toLocaleString('es-AR'), descripcion: prod.desc, rubro: prod.rubro, tipo: 'sale', qty: cant, prev_stock: prod.stock, new_stock: newStock, usuario: currentUser, note: 'Venta #'+numero+' — '+cliente }]);
+          prod.stock = newStock;
+          itemsDescontados.push(cant + 'x ' + prod.desc);
+        } else {
+          itemsSinStock.push(codigo);
+        }
+      }
+      if (itemsDescontados.length > 0) updateNavAlerts();
+    }
+
     // Crear despacho automáticamente si se eligió transporte
     if (transporte && fechaDespacho) {
       const checklistItems = checklistRaw
@@ -3846,9 +3872,11 @@ async function guardarVenta() {
     checkPrimeraVenta(currentUser);
     if (numero.startsWith('SCH-')) setTimeout(() => mostrarBonusSCH(currentUser), 800);
     else {
-      const msg = transporte
+      let msg = transporte
         ? '✅ Venta registrada y orden de despacho creada para ' + transporte + '.'
         : '✅ Venta registrada. Cuando cobres, subí el comprobante.';
+      if (itemsDescontados.length > 0) msg += '\n\n📦 Stock descontado: ' + itemsDescontados.length + ' producto' + (itemsDescontados.length>1?'s':'') + '.';
+      if (itemsSinStock.length > 0) msg += '\n⚠️ Códigos no encontrados en stock: ' + itemsSinStock.join(', ');
       alert(msg);
     }
   } else {
