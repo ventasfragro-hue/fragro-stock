@@ -3782,7 +3782,7 @@ async function leerPdfDuxVenta(input) {
       checklistEl.value = items.join('\n');
       if (status) { status.style.color='#39FF14'; status.textContent='✅ '+items.length+' ítem'+(items.length>1?'s':'')+' detectado'+(items.length>1?'s':'')+' automáticamente'; }
     } else {
-      if (status) { status.style.color='#f59e0b'; status.textContent='⚠️ No se detectaron ítems. Escribilos manualmente.'; }
+      if (status) { status.innerHTML = '⚠️ No se detectaron ítems. <details style="margin-top:4px;"><summary style="cursor:pointer;color:#60a5fa;font-size:11px;">Ver texto extraído</summary><pre style="font-size:10px;color:#aaa;white-space:pre-wrap;max-height:150px;overflow:auto;background:#0a0a0a;padding:6px;border-radius:4px;margin-top:4px;">' + textoCompleto.substring(0,1200).replace(/</g,'&lt;') + '</pre></details>'; }
     }
   } catch(e) {
     if (status) { status.style.color='#ef4444'; status.textContent='❌ Error: '+e.message; }
