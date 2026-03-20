@@ -3820,7 +3820,7 @@ async function leerPdfDuxVenta(input) {
     }
 
     // Cliente: "SEÑOR/ES: NOMBRE APELLIDO"
-    const clienteMatch = textoCompleto.match(/SE[ÑN]OR\/ES:\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s,\.]{3,60?}?)(?:\s{2,}|IVA:|CUIT:|$)/i);
+    const clienteMatch = textoCompleto.match(/SE[ÑN]OR\/ES:\s+([\s\S]+?)\s{2,}/i);
     if (clienteMatch) {
       const clienteEl = document.getElementById('ventaCliente');
       const nombreCliente = clienteMatch[1].trim().replace(/\s+/g,' ');
@@ -3830,8 +3830,8 @@ async function leerPdfDuxVenta(input) {
       }
     }
 
-    // Monto total: "TOTAL: $ 968.000,00"
-    const totalMatch = textoCompleto.match(/TOTAL:\s*\$\s*([\d\.]+,\d{2})/i);
+    // Monto total: "TOTAL: $ 968.000,00" (excluir SUBTOTAL)
+    const totalMatch = textoCompleto.match(/(?<!SUB)TOTAL:\s*\$\s*([\d\.]+,\d{2})/i);
     if (totalMatch) {
       const montoEl = document.getElementById('ventaMonto');
       if (montoEl && !montoEl.value) {
@@ -3842,15 +3842,20 @@ async function leerPdfDuxVenta(input) {
       }
     }
 
-    // IVA: si dice "RESPONSABLE INSCRIPTO" tiene IVA, "CONSUMIDOR FINAL" también
-    // Si dice "EXENTO" → sin IVA
+    // IVA: si SUBTOTAL < TOTAL hay IVA, si son iguales es sin IVA
     const sinIVAEl = document.getElementById('ventaSinIVA');
     const conIVAEl = document.getElementById('ventaConIVA');
-    if (textoCompleto.match(/EXENTO/i) && sinIVAEl) {
-      sinIVAEl.checked = true;
-      autocompletado.push('IVA: No incluye');
-    } else if (conIVAEl) {
-      conIVAEl.checked = true;
+    const subtotalMatch = textoCompleto.match(/SUBTOTAL:\s*\$\s*([\d\.]+,\d{2})/i);
+    if (subtotalMatch && totalMatch) {
+      const subtotal = parseFloat(subtotalMatch[1].replace(/\./g,'').replace(',','.'));
+      const total = parseFloat(totalMatch[1].replace(/\./g,'').replace(',','.'));
+      if (total > subtotal && sinIVAEl && conIVAEl) {
+        conIVAEl.checked = true;
+        autocompletado.push('Con IVA');
+      } else if (sinIVAEl) {
+        sinIVAEl.checked = true;
+        autocompletado.push('Sin IVA');
+      }
     }
 
     // Mostrar resultado
