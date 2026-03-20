@@ -4435,53 +4435,45 @@ async function leerPdfDux(input) {
 function extraerItemsDux(texto) {
   const items = [];
 
-  // El texto de PDF.js llega todo junto en una sola cadena.
-  // Formato confirmado Dux:
-  // ...encabezado... Codigo Descripcion Cant. ... CODIGO DESC CANT,CC PRECIO,CC 0,00 SUB,CC 21,00 TOTAL,CC CODIGO2...
-  // Ancla MÁS CONFIABLE: cada producto termina en "0,00 [SUBTOTAL] 21,00 [TOTAL_IVA]"
-
-  // Paso 1: cortar todo lo que está antes de "Codigo Descripcion"
+  // Cortar desde "Codigo Descripcion Cant." hacia adelante
   const corte = texto.search(/Codigo\s+Descripcion\s+Cant/i);
-  const bloque = corte >= 0 ? texto.substring(corte) : texto;
+  if (corte < 0) return items;
+  const bloque = texto.substring(corte);
 
-  // Paso 2: cortar hasta el primer SUBTOTAL (fin de productos)
-  const finIdx = bloque.search(/SUBTOTAL:\s*\$/i);
-  const bloqueProductos = finIdx > 0 ? bloque.substring(0, finIdx) : bloque;
-
-  // Paso 3: partir en ítems usando "0,00 [número] 21,00" como separador de fin de línea
-  // Cada ítem tiene: CODIGO DESCRIPCION CANT,CC PRECIO,CC 0,00 SUBTOTAL,CC 21,00 TOTAL_IVA,CC
-  const segmentos = bloqueProductos.split(/\s+21,00\s+[\d\.]+,\d{2}/);
+  // Partir en segmentos usando "21,00 [NUMERO]" como fin de cada producto
+  // Cada producto termina: ... 0,00  SUBTOTAL  21,00  TOTAL_IVA
+  const segmentos = bloque.split(/\s+21,00\s+[\d\.]+,\d{2}/);
 
   for (let i = 0; i < segmentos.length - 1; i++) {
-    const seg = segmentos[i].trim();
-    if (!seg) continue;
+    const seg = segmentos[i];
 
-    // Buscar el último patrón CODIGO + DESC + CANT,CC + PRECIO,CC + 0,00 en el segmento
-    // El código está al final del segmento anterior o al inicio del actual
-    const m = seg.match(/([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+(.*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s*$/);
+    // Buscar al final del segmento: CODIGO DESC CANT 0,00
+    // Código: alfanumérico con guiones/barras
+    // Cant: número con coma (ej: 2,00 o 1,60)
+    const m = seg.match(/([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+([\s\S]*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s*$/);
     if (!m) continue;
 
     const codigo = m[1].trim();
-    let desc = m[2].trim().replace(/\s+/g,' ');
+    let desc = m[2].trim().replace(/\s+/g, ' ');
     const cantStr = m[3];
-    const cantNum = parseFloat(cantStr.replace(',','.'));
+    const cantNum = parseFloat(cantStr.replace(',', '.'));
 
-    // Filtros
     if (cantNum <= 0 || cantNum > 999) continue;
     if (desc.length < 3) continue;
-    if (/^(codigo|descripcion|cant|precio|subtotal|total|iva|fecha|vendedor|sub total)/i.test(desc)) continue;
+    if (/^(codigo|descripcion|cant|precio|sub\s*total|total|iva|fecha|vendedor|generado|www)/i.test(desc)) continue;
 
-    // Limpiar descripción: quitar peso final "(8,2 KG)" o "(10 KG) -"
-    desc = desc.replace(/\s*\([\d,\.]+\s*KG(?:\/EJE)?\)\s*(?:\([\d]+\s*AGUJEROS\))?\s*-?\s*$/i,'').trim();
-    desc = desc.replace(/\s*\([\d]+\s*AGUJEROS\)\s*-?\s*$/i,'').trim();
-    desc = desc.replace(/\s*-\s*$/, '').trim();
+    // Limpiar peso al final: "(8,2 KG)" / "(10 KG) -" / "(5 AGUJEROS)"
+    desc = desc.replace(/\s*\([\d,\.]+\s*KG(?:\/EJE)?\)\s*(?:\(\d+\s*AGUJEROS\))?\s*-?\s*$/i, '').trim();
+    desc = desc.replace(/\s*\(\d+\s*AGUJEROS\)\s*-?\s*$/i, '').trim();
+    desc = desc.replace(/\s+-\s*$/, '').trim();
 
-    const cantDisplay = cantNum === Math.floor(cantNum) ? String(Math.floor(cantNum)) : cantStr.replace(',','.');
+    const cantDisplay = cantNum === Math.floor(cantNum) ? String(Math.floor(cantNum)) : cantStr.replace(',', '.');
     items.push(cantDisplay + 'x ' + desc + ' [' + codigo + ']');
   }
 
   return [...new Set(items)].slice(0, 50);
 }
+
 async function tildarItem(despId, itemIdx, tildado) {
   const desp = despachos.find(d => d.id === despId);
   if (!desp) return;
