@@ -3764,8 +3764,16 @@ async function leerPdfDuxVenta(input) {
   if (status) { status.style.display='block'; status.style.color='#f59e0b'; status.textContent='⏳ Leyendo PDF...'; }
 
   if (typeof pdfjsLib === 'undefined') {
-    if (status) { status.style.color='#f59e0b'; status.textContent='⚠️ Escribí los ítems manualmente.'; }
-    return;
+    // Esperar hasta 3 segundos a que cargue PDF.js
+    let intentos = 0;
+    while (typeof pdfjsLib === 'undefined' && intentos < 30) {
+      await new Promise(r => setTimeout(r, 100));
+      intentos++;
+    }
+    if (typeof pdfjsLib === 'undefined') {
+      if (status) { status.style.color='#f59e0b'; status.textContent='⚠️ Escribí los ítems manualmente.'; }
+      return;
+    }
   }
 
   try {
@@ -4440,8 +4448,15 @@ async function leerPdfDux(input) {
   }
 
   if (typeof pdfjsLib === 'undefined') {
-    if (status) { status.style.display='block'; status.style.color='#f59e0b'; status.textContent='⚠️ Cargador de PDF no disponible. Escribí los ítems manualmente.'; }
-    return;
+    let intentos = 0;
+    while (typeof pdfjsLib === 'undefined' && intentos < 30) {
+      await new Promise(r => setTimeout(r, 100));
+      intentos++;
+    }
+    if (typeof pdfjsLib === 'undefined') {
+      if (status) { status.style.display='block'; status.style.color='#f59e0b'; status.textContent='⚠️ Cargador de PDF no disponible. Escribí los ítems manualmente.'; }
+      return;
+    }
   }
 
   if (status) { status.style.display = 'block'; status.style.color = '#f59e0b'; status.textContent = '⏳ Leyendo PDF...'; }
