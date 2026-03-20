@@ -4290,7 +4290,8 @@ async function leerPdfDux(input) {
       preview.textContent = '📄 ' + file.name;
     } else {
       status.style.color = '#f59e0b';
-      status.textContent = '⚠️ No se detectaron ítems automáticamente. Podés escribirlos manualmente abajo.';
+      // Mostrar primeros 800 chars del texto extraído para diagnóstico
+      status.innerHTML = '⚠️ No se detectaron ítems. <details style="margin-top:6px;"><summary style="cursor:pointer;color:#60a5fa;font-size:11px;">Ver texto extraído del PDF (para soporte)</summary><pre style="font-size:10px;color:#aaa;white-space:pre-wrap;max-height:200px;overflow:auto;background:#0a0a0a;padding:8px;border-radius:4px;margin-top:4px;">' + textoCompleto.substring(0,1200).replace(/</g,'&lt;') + '</pre></details>';
       preview.textContent = '📄 ' + file.name;
     }
   } catch(e) {
