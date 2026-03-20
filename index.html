@@ -4301,48 +4301,53 @@ async function leerPdfDux(input) {
 
 function extraerItemsDux(texto) {
   const items = [];
-  const lineas = texto.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
 
-  // Patrones comunes en presupuestos Dux:
-  // "2 CARDAN 1000MM" / "3 x Cadena ASA 80" / "1 Repuesto..."
-  // También líneas con cantidad al final: "CARDAN 1000MM 2"
-  const patron1 = /^(\d+(?:[.,]\d+)?)\s*[xX]?\s+(.{5,80})$/;  // cantidad al inicio
-  const patron2 = /^(.{5,80})\s+(\d+(?:[.,]\d+)?)\s*(?:u[nd]?|pz|kg)?$/i; // cantidad al final
-  const patron3 = /^(\d+)\s+(.{5,80})\s+\$/; // con precio
+  // Formato Dux: "CODIGO DESCRIPCION CANT. PRECIO_UNI % SUB_TOTAL % SUB_TOTAL_IVA"
+  // Ejemplo: "MC-175931 RUEDA AGRICOLA 8.25 X 22.5 3/8... 4,00 172.194,00 0,00 688.776,00 21,00 833.418,96"
+  // La cantidad es el primer número con coma que aparece después de la descripción
 
-  for (const linea of lineas) {
-    // Ignorar líneas que son totales, fechas, encabezados
-    if (/total|subtotal|iva|fecha|cliente|domicilio|telefono|email|^\$/i.test(linea)) continue;
-    if (linea.length < 5 || linea.length > 120) continue;
-    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(linea)) continue; // fechas
+  // Dividir el texto en tokens — el PDF de Dux concatena todo en una línea larga
+  // Buscamos el bloque de ítems entre el encabezado de columnas y el subtotal
+  const bloqueMatch = texto.match(/Codigo\s+Descripcion\s+Cant[\s\S]*?(?=SUBTOTAL|Subtotal|subtotal)/i);
+  const bloque = bloqueMatch ? bloqueMatch[0] : texto;
 
-    let match = linea.match(patron1);
-    if (match && parseFloat(match[1]) <= 999) {
-      const cant = match[1];
-      const desc = match[2].trim();
-      if (desc.length > 4 && !/^\d+$/.test(desc)) {
-        items.push(cant + 'x ' + desc);
-        continue;
-      }
-    }
+  // Patrón Dux: código alfanumérico + descripción + cantidad (número con coma) + precios
+  // Código: letras/números/guiones al inicio
+  // Descripción: texto hasta que aparece el primer número con coma (la cantidad)
+  const patronDux = /([A-Z0-9\-\/\.]+)\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9\s\/\.\-\(\)"'x,]+?)\s+(\d{1,4},\d{2})\s+[\d\.,]+\s+[\d\.,]+\s+[\d\.,]+/gi;
 
-    match = linea.match(patron3);
-    if (match) {
-      items.push(match[1] + 'x ' + match[2].trim());
-      continue;
-    }
+  let match;
+  while ((match = patronDux.exec(bloque)) !== null) {
+    const codigo = match[1].trim();
+    const desc = match[2].trim().replace(/\s+/g,' ');
+    const cant = match[3].replace(',','.');
+    const cantNum = parseFloat(cant);
 
-    match = linea.match(patron2);
-    if (match && parseFloat(match[2]) <= 999) {
-      const desc = match[1].trim();
-      const cant = match[2];
-      if (desc.length > 4 && !/^\d+$/.test(desc)) {
-        items.push(cant + 'x ' + desc);
+    // Filtrar líneas que no son productos
+    if (/^(codigo|descripcion|cant|precio|subtotal|total|iva|fecha|vendedor|observ)/i.test(desc)) continue;
+    if (cantNum <= 0 || cantNum > 9999) continue;
+    if (desc.length < 4) continue;
+
+    // Formatear cantidad: si es entero mostrar sin decimales
+    const cantStr = cantNum === Math.floor(cantNum) ? String(Math.floor(cantNum)) : String(cantNum);
+    items.push(cantStr + 'x ' + desc + ' [' + codigo + ']');
+  }
+
+  // Si el patrón Dux no encontró nada, intentar patrón genérico
+  if (items.length === 0) {
+    const lineas = texto.split(/[\n\r]|\s{3,}/).map(l=>l.trim()).filter(l=>l.length>5);
+    const patronGenerico = /^([A-Z0-9\-\/]+)\s+(.{8,60}?)\s+(\d{1,3}),\d{2}\s+[\d\.,]+/;
+    for (const linea of lineas) {
+      const m = linea.match(patronGenerico);
+      if (m) {
+        const cant = parseInt(m[3]);
+        if (cant > 0 && cant < 1000) {
+          items.push(cant + 'x ' + m[2].trim() + ' [' + m[1] + ']');
+        }
       }
     }
   }
 
-  // Deduplicar
   return [...new Set(items)].slice(0, 50);
 }
 
