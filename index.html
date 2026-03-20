@@ -4481,8 +4481,9 @@ async function leerPdfDux(input) {
 
 function extraerItemsDux(texto) {
   const items = [];
+  const INVALID_CODES = /^(IVA|SUB|TOTAL|DESC|CANT|PRECIO|DESCUENTO|GENERADO|RESPONSABLE|CUIT|CONVENIO|MULTILATERAL|VENDEDOR|OBSERV|FECHA|WWW|DOMICILIO|LOCALIDAD|PROVINCIA|CORREO|TELEFONO)$/i;
 
-  // Cortar desde encabezado de columnas Dux
+  // Cortar desde encabezado de columnas
   const corte = texto.search(/Codigo\s+Descripcion\s+Cant/i);
   if (corte < 0) return items;
   const bloque = texto.substring(corte);
@@ -4490,28 +4491,44 @@ function extraerItemsDux(texto) {
   // Partir por "21,00 [TOTAL_IVA]" — cada producto termina con el IVA 21%
   const segmentos = bloque.split(/\s+21,00\s+[\d\.]+,\d{2}/);
 
-  // Patrón al final de cada segmento: CODIGO + DESC + CANT + PRECIO + 0,00 + SUBTOTAL
-  const pat = /([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+([\s\S]*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s+[\d\.]+,\d{2}\s*$/;
-
   for (let i = 0; i < segmentos.length - 1; i++) {
-    const m = segmentos[i].match(pat);
-    if (!m) continue;
+    const seg = segmentos[i];
+    // Split por 3+ espacios para separar: [basura+CODIGO] [DESCRIPCION] [CANT...] [PRECIO] [0,00] [SUBTOTAL]
+    const parts = seg.split(/\s{3,}/);
+    if (parts.length < 2) continue;
 
-    const codigo = m[1].trim();
-    let desc = m[2].trim().replace(/\s+/g, ' ');
-    const cantStr = m[3];
-    const cantNum = parseFloat(cantStr.replace(',', '.'));
+    // Código: último token del primer part (sin espacios)
+    const codigo = parts[0].trim().split(/\s+/).pop();
+    if (!codigo) continue;
+    if (!codigo.match(/^[A-Z0-9][A-Z0-9\-\/\.]{0,25}$/) && !codigo.match(/^\d{3,}$/)) continue;
+    if (INVALID_CODES.test(codigo)) continue;
 
-    // Filtrar basura del encabezado
-    if (/sub\s*total|\biva\b|codigo|descripcion|cant\.|precio|generado|www/i.test(desc)) continue;
-    if (cantNum <= 0 || cantNum > 999 || desc.length < 3) continue;
+    // Descripción: parts[1], más texto adicional antes de la cantidad
+    let desc = parts[1].trim();
 
-    // Limpiar descripción
-    desc = desc.replace(/\s*\([\d,\.]+\s*KG(?:\/EJE)?\)\s*(?:\(\d+\s*AGUJEROS\))?\s*-?\s*$/i, '').trim();
-    desc = desc.replace(/\s*\(\d+\s*AGUJEROS\)\s*-?\s*$/i, '').trim();
-    desc = desc.replace(/\s+-\s*$/, '').trim();
+    // Buscar cantidad en parts[2..n] — puede estar junto a texto "(8,2 KG)  2,00"
+    let cantStr = null;
+    for (let j = 2; j < parts.length; j++) {
+      const p = parts[j].trim().replace(/^-\s*/, '');
+      const m = p.match(/(\d{1,4},\d{2})(?:\s|$)/);
+      if (m && parseFloat(m[1].replace(',','.')) > 0) {
+        cantStr = m[1];
+        break;
+      } else if (!p.match(/^\d{1,3}\.\d{3},\d{2}$/) && !p.match(/^0,00$/) && p.length > 1 && !p.match(/^\d/)) {
+        desc += ' ' + p;
+      }
+    }
 
-    const cantDisplay = cantNum === Math.floor(cantNum) ? String(Math.floor(cantNum)) : cantStr.replace(',', '.');
+    if (!cantStr) continue;
+    const cant = parseFloat(cantStr.replace(',', '.'));
+    if (cant <= 0 || cant > 999) continue;
+
+    desc = desc.replace(/\s+/g, ' ').trim();
+    desc = desc.replace(/\s*\([\d,\.]+\s*KG[^)]*\)\s*(?:\([^)]*\))?\s*-?\s*$/i, '').trim();
+    desc = desc.replace(/\s*-\s*$/, '').trim();
+    if (desc.length < 3 || /^(sub|iva|codigo|generado)/i.test(desc)) continue;
+
+    const cantDisplay = cant === Math.floor(cant) ? String(Math.floor(cant)) : cantStr.replace(',', '.');
     items.push(cantDisplay + 'x ' + desc + ' [' + codigo + ']');
   }
 
