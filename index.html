@@ -358,6 +358,8 @@
   .ptab.active { background:rgba(240,165,0,0.12); border-color:rgba(240,165,0,0.3); color:var(--accent); font-weight:600; }
   .supervisor-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(74,158,255,0.12); border:1px solid rgba(74,158,255,0.3); border-radius:8px; padding:6px 14px; font-size:13px; color:#4a9eff; margin-bottom:16px; }
 </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 </head>
 <body>
 
@@ -972,8 +974,9 @@
         <div class="form-group"><label>Observaciones</label><input type="text" id="dObservaciones" placeholder="Instrucciones especiales, horarios, etc."></div>
         <div class="form-group">
           <label>📎 Presupuesto PDF (Dux) — opcional</label>
-          <input type="file" id="dPresupuestoPdf" accept="application/pdf,image/*" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
+          <input type="file" id="dPresupuestoPdf" accept="application/pdf,image/*" onchange="leerPdfDux(this)" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
           <div id="dPdfPreview" style="margin-top:6px;font-size:12px;color:var(--text3);"></div>
+          <div id="dPdfStatus" style="margin-top:4px;font-size:12px;display:none;"></div>
         </div>
         <div class="form-group">
           <label>📋 Ítems del checklist <span style="font-size:11px;color:var(--text3);">(uno por línea — el operario los tildará)</span></label>
@@ -4241,6 +4244,99 @@ async function crearDespacho() {
   }
 }
 
+
+
+async function leerPdfDux(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('dPdfStatus');
+  const preview = document.getElementById('dPdfPreview');
+  const checklistEl = document.getElementById('dChecklist');
+
+  status.style.display = 'block';
+  status.style.color = '#f59e0b';
+  status.textContent = '⏳ Leyendo PDF...';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let textoCompleto = '';
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const lines = content.items.map(i => i.str).join(' ');
+      textoCompleto += lines + '
+';
+    }
+
+    // Extraer ítems del presupuesto Dux
+    // Busca patrones como: número, descripción, cantidad
+    const items = extraerItemsDux(textoCompleto);
+
+    if (items.length > 0) {
+      checklistEl.value = items.join('
+');
+      status.style.color = '#39FF14';
+      status.textContent = '✅ ' + items.length + ' ítem' + (items.length>1?'s':'') + ' detectado' + (items.length>1?'s':'') + ' automáticamente';
+      preview.textContent = '📄 ' + file.name;
+    } else {
+      status.style.color = '#f59e0b';
+      status.textContent = '⚠️ No se detectaron ítems automáticamente. Podés escribirlos manualmente abajo.';
+      preview.textContent = '📄 ' + file.name;
+    }
+  } catch(e) {
+    status.style.color = '#ef4444';
+    status.textContent = '❌ Error al leer el PDF: ' + e.message;
+  }
+}
+
+function extraerItemsDux(texto) {
+  const items = [];
+  const lineas = texto.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+
+  // Patrones comunes en presupuestos Dux:
+  // "2 CARDAN 1000MM" / "3 x Cadena ASA 80" / "1 Repuesto..."
+  // También líneas con cantidad al final: "CARDAN 1000MM 2"
+  const patron1 = /^(\d+(?:[.,]\d+)?)\s*[xX]?\s+(.{5,80})$/;  // cantidad al inicio
+  const patron2 = /^(.{5,80})\s+(\d+(?:[.,]\d+)?)\s*(?:u[nd]?|pz|kg)?$/i; // cantidad al final
+  const patron3 = /^(\d+)\s+(.{5,80})\s+\$/; // con precio
+
+  for (const linea of lineas) {
+    // Ignorar líneas que son totales, fechas, encabezados
+    if (/total|subtotal|iva|fecha|cliente|domicilio|telefono|email|^\$/i.test(linea)) continue;
+    if (linea.length < 5 || linea.length > 120) continue;
+    if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/.test(linea)) continue; // fechas
+
+    let match = linea.match(patron1);
+    if (match && parseFloat(match[1]) <= 999) {
+      const cant = match[1];
+      const desc = match[2].trim();
+      if (desc.length > 4 && !/^\d+$/.test(desc)) {
+        items.push(cant + 'x ' + desc);
+        continue;
+      }
+    }
+
+    match = linea.match(patron3);
+    if (match) {
+      items.push(match[1] + 'x ' + match[2].trim());
+      continue;
+    }
+
+    match = linea.match(patron2);
+    if (match && parseFloat(match[2]) <= 999) {
+      const desc = match[1].trim();
+      const cant = match[2];
+      if (desc.length > 4 && !/^\d+$/.test(desc)) {
+        items.push(cant + 'x ' + desc);
+      }
+    }
+  }
+
+  // Deduplicar
+  return [...new Set(items)].slice(0, 50);
+}
 
 async function tildarItem(despId, itemIdx, tildado) {
   const desp = despachos.find(d => d.id === despId);
