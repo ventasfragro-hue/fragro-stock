@@ -4435,22 +4435,19 @@ async function leerPdfDux(input) {
 function extraerItemsDux(texto) {
   const items = [];
 
-  // Cortar desde "Codigo Descripcion Cant." hacia adelante
+  // Cortar desde encabezado de columnas Dux
   const corte = texto.search(/Codigo\s+Descripcion\s+Cant/i);
   if (corte < 0) return items;
   const bloque = texto.substring(corte);
 
-  // Partir en segmentos usando "21,00 [NUMERO]" como fin de cada producto
-  // Cada producto termina: ... 0,00  SUBTOTAL  21,00  TOTAL_IVA
+  // Partir por "21,00 [TOTAL_IVA]" — cada producto termina con el IVA 21%
   const segmentos = bloque.split(/\s+21,00\s+[\d\.]+,\d{2}/);
 
-  for (let i = 0; i < segmentos.length - 1; i++) {
-    const seg = segmentos[i];
+  // Patrón al final de cada segmento: CODIGO + DESC + CANT + PRECIO + 0,00 + SUBTOTAL
+  const pat = /([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+([\s\S]*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s+[\d\.]+,\d{2}\s*$/;
 
-    // Buscar al final del segmento: CODIGO DESC CANT 0,00
-    // Código: alfanumérico con guiones/barras
-    // Cant: número con coma (ej: 2,00 o 1,60)
-    const m = seg.match(/([A-Z0-9][A-Z0-9\-\/\.]{0,20})\s+([\s\S]*?)\s+(\d{1,4},\d{2})\s+[\d\.]+,\d{2}\s+0,00\s*$/);
+  for (let i = 0; i < segmentos.length - 1; i++) {
+    const m = segmentos[i].match(pat);
     if (!m) continue;
 
     const codigo = m[1].trim();
@@ -4458,11 +4455,11 @@ function extraerItemsDux(texto) {
     const cantStr = m[3];
     const cantNum = parseFloat(cantStr.replace(',', '.'));
 
-    if (cantNum <= 0 || cantNum > 999) continue;
-    if (desc.length < 3) continue;
-    if (/^(codigo|descripcion|cant|precio|sub\s*total|total|iva|fecha|vendedor|generado|www)/i.test(desc)) continue;
+    // Filtrar basura del encabezado
+    if (/sub\s*total|\biva\b|codigo|descripcion|cant\.|precio|generado|www/i.test(desc)) continue;
+    if (cantNum <= 0 || cantNum > 999 || desc.length < 3) continue;
 
-    // Limpiar peso al final: "(8,2 KG)" / "(10 KG) -" / "(5 AGUJEROS)"
+    // Limpiar descripción
     desc = desc.replace(/\s*\([\d,\.]+\s*KG(?:\/EJE)?\)\s*(?:\(\d+\s*AGUJEROS\))?\s*-?\s*$/i, '').trim();
     desc = desc.replace(/\s*\(\d+\s*AGUJEROS\)\s*-?\s*$/i, '').trim();
     desc = desc.replace(/\s+-\s*$/, '').trim();
