@@ -3846,32 +3846,25 @@ async function guardarVenta() {
         const codigo = m[2].trim();
         if (!codigo || codigo === '-' || isNaN(cant)) continue;
         const prod = products.find(p => p.code.trim().toLowerCase() === codigo.toLowerCase());
-        if (prod) {
-          const newStock = Math.max(0, prod.stock - cant);
+        if (prod && prod.stock > 0) {
+          const newStock = Math.max(0, prod.stock - Math.floor(cant));
           await supaPatch('products', prod.id, { stock: newStock });
-          await supaPost('history', [{ id: Date.now() + Math.random(), fecha: new Date().toLocaleString('es-AR'), descripcion: prod.desc, rubro: prod.rubro, tipo: 'sale', qty: cant, prev_stock: prod.stock, new_stock: newStock, usuario: currentUser, note: 'Venta #'+numero+' — '+cliente }]);
-          prod.stock = newStock;
-          itemsDescontados.push(cant + 'x ' + prod.desc);
-        } else if (codigo && codigo !== '-') {
-          // Producto no existe — crearlo automáticamente con datos del PDF
-          const descLinea = linea.replace(/^\d+(?:\.\d+)?x\s+/, '').replace(/\s*\[[^\]]+\]$/, '').trim();
-          const newProd = {
+          await supaPost('history', [{
             id: Date.now() + Math.floor(Math.random()*9999),
-            code: codigo,
-            descripcion: descLinea,
-            rubro: '⚠️ Sin clasificar',
-            stock: -cant, // negativo indica que se vendió sin stock previo
-            min: 0,
-            peso_kg: null
-          };
-          const resNew = await supaPost('products', [newProd]);
-          if (resNew && !resNew.error) {
-            products.push({ id: newProd.id, code: newProd.code, desc: newProd.descripcion, rubro: newProd.rubro, stock: newProd.stock, min: 0 });
-            await supaPost('history', [{ id: Date.now() + Math.random(), fecha: new Date().toLocaleString('es-AR'), descripcion: descLinea, rubro: '⚠️ Sin clasificar', tipo: 'sale', qty: cant, prev_stock: 0, new_stock: -cant, usuario: currentUser, note: 'Venta #'+numero+' — '+cliente+' (producto creado automáticamente)' }]);
-            itemsDescontados.push(cant + 'x ' + descLinea + ' ⚠️ nuevo');
-          } else {
-            itemsSinStock.push(codigo);
-          }
+            fecha: new Date().toLocaleString('es-AR'),
+            descripcion: prod.desc,
+            rubro: prod.rubro,
+            tipo: 'sale',
+            qty: Math.floor(cant),
+            prev_stock: prod.stock,
+            new_stock: newStock,
+            usuario: currentUser,
+            note: 'Venta #'+numero+' — '+cliente
+          }]);
+          prod.stock = newStock;
+          itemsDescontados.push(Math.floor(cant) + 'x ' + prod.desc);
+        } else if (!prod) {
+          itemsSinStock.push(codigo);
         }
       }
       if (itemsDescontados.length > 0) renderAlerts();
