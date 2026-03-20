@@ -358,8 +358,7 @@
   .ptab.active { background:rgba(240,165,0,0.12); border-color:rgba(240,165,0,0.3); color:var(--accent); font-weight:600; }
   .supervisor-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(74,158,255,0.12); border:1px solid rgba(74,158,255,0.3); border-radius:8px; padding:6px 14px; font-size:13px; color:#4a9eff; margin-bottom:16px; }
 </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" onload="if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';"></script>
 </head>
 <body>
 
@@ -4253,9 +4252,20 @@ async function leerPdfDux(input) {
   const preview = document.getElementById('dPdfPreview');
   const checklistEl = document.getElementById('dChecklist');
 
-  status.style.display = 'block';
-  status.style.color = '#f59e0b';
-  status.textContent = '⏳ Leyendo PDF...';
+  if (preview) preview.textContent = '📄 ' + file.name;
+
+  // Si no es PDF, salir sin error
+  if (file.type !== 'application/pdf') {
+    if (status) { status.style.display='block'; status.style.color='#aaa'; status.textContent='Imagen cargada — checklist manual.'; }
+    return;
+  }
+
+  if (typeof pdfjsLib === 'undefined') {
+    if (status) { status.style.display='block'; status.style.color='#f59e0b'; status.textContent='⚠️ Cargador de PDF no disponible. Escribí los ítems manualmente.'; }
+    return;
+  }
+
+  if (status) { status.style.display = 'block'; status.style.color = '#f59e0b'; status.textContent = '⏳ Leyendo PDF...'; }
 
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -4266,8 +4276,7 @@ async function leerPdfDux(input) {
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
       const lines = content.items.map(i => i.str).join(' ');
-      textoCompleto += lines + '
-';
+      textoCompleto += lines + '\n';
     }
 
     // Extraer ítems del presupuesto Dux
@@ -4275,8 +4284,7 @@ async function leerPdfDux(input) {
     const items = extraerItemsDux(textoCompleto);
 
     if (items.length > 0) {
-      checklistEl.value = items.join('
-');
+      checklistEl.value = items.join('\n');
       status.style.color = '#39FF14';
       status.textContent = '✅ ' + items.length + ' ítem' + (items.length>1?'s':'') + ' detectado' + (items.length>1?'s':'') + ' automáticamente';
       preview.textContent = '📄 ' + file.name;
