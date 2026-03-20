@@ -970,6 +970,15 @@
         <div class="form-group"><label>Destinatario / Cliente</label><input type="text" id="dDestinatario" placeholder="Nombre del cliente o destino"></div>
         <div class="form-group"><label>Detalle del Envío</label><textarea id="dDetalle" rows="4" placeholder="Productos, cantidades, referencias..." style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:14px;resize:vertical;"></textarea></div>
         <div class="form-group"><label>Observaciones</label><input type="text" id="dObservaciones" placeholder="Instrucciones especiales, horarios, etc."></div>
+        <div class="form-group">
+          <label>📎 Presupuesto PDF (Dux) — opcional</label>
+          <input type="file" id="dPresupuestoPdf" accept="application/pdf,image/*" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
+          <div id="dPdfPreview" style="margin-top:6px;font-size:12px;color:var(--text3);"></div>
+        </div>
+        <div class="form-group">
+          <label>📋 Ítems del checklist <span style="font-size:11px;color:var(--text3);">(uno por línea — el operario los tildará)</span></label>
+          <textarea id="dChecklist" rows="5" placeholder="Ej:&#10;2x Cardán 1000mm&#10;1x Repuesto rueda 16&#10;3x Cadena ASA 80" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;resize:vertical;"></textarea>
+        </div>
         <div style="display:flex;gap:12px;margin-top:8px;">
           <button class="btn-primary" onclick="crearDespacho()" style="padding:12px 28px;">CREAR ORDEN</button>
           <button class="btn-secondary" onclick="document.getElementById('formNuevoDespacho').style.display='none'" style="padding:12px 28px;">Cancelar</button>
@@ -4061,13 +4070,48 @@ function renderDespachos(filtro) {
     const fecha = d.fecha_despacho ? new Date(d.fecha_despacho + 'T12:00:00').toLocaleDateString('es-AR') : '—';
     const esDeposito = currentUser === 'Depósito';
     const esDaniel = currentUser === 'Daniel Cardozo';
+
+    // Checklist
+    let checkItems = [];
+    try { if (d.checklist) checkItems = JSON.parse(d.checklist); } catch(e) {}
+    const totalItems = checkItems.length;
+    const tildados = checkItems.filter(i=>i.tildado).length;
+    const checklistCompleto = totalItems === 0 || tildados === totalItems;
+
+    let checklistHtml = '';
+    if (totalItems > 0 && d.estado !== 'despachado') {
+      checklistHtml = '<div style="margin-top:12px;background:rgba(0,0,0,0.3);border:1px solid rgba(57,255,20,0.15);border-radius:8px;padding:12px;">'
+        +'<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:8px;">📋 Checklist — '+tildados+'/'+totalItems+' ítems</div>'
+        + checkItems.map(function(item,idx) {
+            return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);">'
+              + (esDeposito && d.estado === 'preparacion'
+                ? '<input type="checkbox" '+(item.tildado?'checked':'')+' onchange="tildarItem('+d.id+','+idx+',this.checked)" style="width:18px;height:18px;accent-color:#39FF14;cursor:pointer;">'
+                : '<span style="font-size:14px;">'+(item.tildado?'✅':'⬜')+'</span>')
+              +'<span style="font-size:13px;color:'+(item.tildado?'#39FF14':'var(--text2)')+';">'+(item.tildado?'<s>'+item.texto+'</s>':item.texto)+'</span>'
+              +'</div>';
+          }).join('')
+        +'</div>';
+    } else if (totalItems > 0 && d.estado === 'despachado') {
+      checklistHtml = '<div style="margin-top:8px;font-size:12px;color:#39FF14;">✅ Checklist completo — confirmado por '+(d.confirmado_por||'—')+'</div>';
+    }
+
+    const pdfHtml = d.presupuesto_pdf
+      ? '<div style="margin-top:8px;"><a href="'+d.presupuesto_pdf+'" download="presupuesto.pdf" style="font-size:12px;color:var(--accent);text-decoration:none;">📄 Ver presupuesto Dux</a></div>'
+      : '';
+
     let botones = '';
     if (d.estado === 'pendiente' && esDeposito)
       botones += '<button onclick="avanzarDespacho('+d.id+',\'preparacion\')" style="padding:6px 14px;background:#1e3a5f;color:#60a5fa;border:1px solid #60a5fa;border-radius:6px;cursor:pointer;font-size:12px;">🔵 En Preparación</button>';
-    if (d.estado === 'preparacion' && esDeposito)
-      botones += '<button onclick="avanzarDespacho('+d.id+',\'despachado\')" style="padding:6px 14px;background:#0a2a0a;color:#39FF14;border:1px solid #39FF14;border-radius:6px;cursor:pointer;font-size:12px;">🟢 Marcar Despachado</button>';
+    if (d.estado === 'preparacion' && esDeposito) {
+      if (checklistCompleto) {
+        botones += '<button onclick="confirmarYDespachar('+d.id+')" style="padding:6px 14px;background:#0a2a0a;color:#39FF14;border:1px solid #39FF14;border-radius:6px;cursor:pointer;font-size:12px;">🟢 Confirmar y Despachar</button>';
+      } else {
+        botones += '<button disabled style="padding:6px 14px;background:#1a1a1a;color:#555;border:1px solid #333;border-radius:6px;font-size:12px;cursor:not-allowed;">🔒 Completá el checklist ('+tildados+'/'+totalItems+')</button>';
+      }
+    }
     if (esDaniel && d.estado !== 'despachado')
       botones += ' <button onclick="eliminarDespacho('+d.id+')" style="padding:6px 14px;background:#2a0a0a;color:#ef4444;border:1px solid #ef4444;border-radius:6px;cursor:pointer;font-size:12px;">🗑 Eliminar</button>';
+
     return '<div style="background:#112240;border:1px solid '+color+'33;border-left:4px solid '+color+';border-radius:12px;padding:18px;margin-bottom:12px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">'
       +'<div><span style="font-weight:700;font-size:16px;color:#fff;">'+d.transporte+'</span>'
@@ -4076,6 +4120,8 @@ function renderDespachos(filtro) {
       +'<div style="margin-top:10px;color:#ccc;font-size:14px;"><strong style="color:#aaa;">Destinatario:</strong> '+(d.destinatario||'—')+'</div>'
       +'<div style="margin-top:6px;color:#ccc;font-size:13px;white-space:pre-wrap;"><strong style="color:#aaa;">Detalle:</strong> '+(d.detalle||'—')+'</div>'
       +(d.observaciones ? '<div style="margin-top:6px;color:#aaa;font-size:12px;"><strong>Obs:</strong> '+d.observaciones+'</div>' : '')
+      +pdfHtml
+      +checklistHtml
       +'<div style="margin-top:6px;color:#555;font-size:11px;">Creado por '+(d.creado_por||'—')+'</div>'
       +(botones ? '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'+botones+'</div>' : '')
       +'</div>';
@@ -4146,29 +4192,84 @@ async function crearDespacho() {
   const destinatario = document.getElementById('dDestinatario').value.trim();
   const detalle = document.getElementById('dDetalle').value.trim();
   const observaciones = document.getElementById('dObservaciones').value.trim();
+  const checklistRaw = (document.getElementById('dChecklist')?.value||'').trim();
 
   if (!transporte) { alert('Seleccioná un transporte'); return; }
   if (!fecha) { alert('Ingresá la fecha de despacho'); return; }
   if (!destinatario) { alert('Ingresá el destinatario'); return; }
   if (!detalle) { alert('Ingresá el detalle del envío'); return; }
 
+  // Procesar checklist — array de {texto, tildado: false}
+  const checklistItems = checklistRaw
+    ? checklistRaw.split('\n').map(l=>l.trim()).filter(Boolean).map(t=>({texto:t, tildado:false}))
+    : [];
+
+  // PDF opcional
+  let pdfBase64 = '';
+  const pdfInput = document.getElementById('dPresupuestoPdf');
+  if (pdfInput && pdfInput.files[0]) {
+    pdfBase64 = await new Promise(resolve => {
+      const r = new FileReader();
+      r.onload = e => resolve(e.target.result);
+      r.readAsDataURL(pdfInput.files[0]);
+    });
+  }
+
   const nuevo = {
     id: Date.now(),
     transporte, fecha_despacho: fecha, destinatario, detalle,
-    observaciones, estado: 'pendiente', creado_por: currentUser
+    observaciones, estado: 'pendiente', creado_por: currentUser,
+    presupuesto_pdf: pdfBase64,
+    checklist: checklistItems.length ? JSON.stringify(checklistItems) : '',
+    checklist_confirmado: false,
+    confirmado_por: ''
   };
 
   const res = await supaPost('despachos', [nuevo]);
   if (res && !res.error) {
     despachos.unshift(nuevo);
     document.getElementById('formNuevoDespacho').style.display = 'none';
-    ['dTransporte','dFecha','dDestinatario','dDetalle','dObservaciones'].forEach(id => {
+    ['dTransporte','dFecha','dDestinatario','dDetalle','dObservaciones','dChecklist'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
+    if (pdfInput) pdfInput.value = '';
+    document.getElementById('dPdfPreview').textContent = '';
     updateNavDespachos();
     renderDespachos('todos');
   } else {
     alert('Error al crear la orden: ' + JSON.stringify(res));
+  }
+}
+
+
+async function tildarItem(despId, itemIdx, tildado) {
+  const desp = despachos.find(d => d.id === despId);
+  if (!desp) return;
+  let items = [];
+  try { items = JSON.parse(desp.checklist || '[]'); } catch(e) {}
+  if (items[itemIdx]) items[itemIdx].tildado = tildado;
+  const nuevoChecklist = JSON.stringify(items);
+  await supaPatch('despachos', despId, { checklist: nuevoChecklist });
+  desp.checklist = nuevoChecklist;
+  renderDespachos(filtroEstadoDespacho || 'todos');
+}
+
+async function confirmarYDespachar(id) {
+  if (!confirm('¿Confirmás que el pedido está completo y listo para despachar?')) return;
+  const res = await supaPatch('despachos', id, {
+    estado: 'despachado',
+    checklist_confirmado: true,
+    confirmado_por: currentUser
+  });
+  if (res) {
+    const idx = despachos.findIndex(d => d.id === id);
+    if (idx >= 0) {
+      despachos[idx].estado = 'despachado';
+      despachos[idx].checklist_confirmado = true;
+      despachos[idx].confirmado_por = currentUser;
+    }
+    updateNavDespachos();
+    renderDespachos(filtroEstadoDespacho || 'todos');
   }
 }
 
