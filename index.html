@@ -357,6 +357,14 @@
   .ptab { padding:8px 16px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:13px; cursor:pointer; transition:all 0.15s; }
   .ptab.active { background:rgba(240,165,0,0.12); border-color:rgba(240,165,0,0.3); color:var(--accent); font-weight:600; }
   .supervisor-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(74,158,255,0.12); border:1px solid rgba(74,158,255,0.3); border-radius:8px; padding:6px 14px; font-size:13px; color:#4a9eff; margin-bottom:16px; }
+
+  .c-modelo-btn { padding:10px 20px;background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all 0.15s; }
+  .c-modelo-btn:hover { border-color:var(--accent);color:var(--accent); }
+  .c-modelo-btn.c-selected { background:rgba(57,255,20,0.15);border-color:var(--accent);color:var(--accent); }
+  .c-linea { display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px; }
+  .c-linea:last-child { border-bottom:none; }
+  .c-linea-label { color:var(--text3); }
+  .c-linea-val { color:var(--text);font-weight:600; }
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer onload="if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';"></script>
@@ -442,6 +450,7 @@
       <div class="sidebar-title">Gestión</div>
       <div class="nav-item" onclick="showView('addProduct',this)"><span class="nav-icon">➕</span> Agregar Producto</div>
       <div class="nav-item" onclick="showView('ranking',this)"><span class="nav-icon">🏆</span> Ranking Ventas</div>
+      <div class="nav-item" onclick="showView('cotizador',this)"><span class="nav-icon">🔧</span> Cotizador Cardánicas</div>
       <div class="nav-item" onclick="showView('clientes',this)"><span class="nav-icon">👥</span> Clientes <span class="nav-count" id="navClientes" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
       <div class="nav-item" onclick="showView('crm',this)"><span class="nav-icon">👥</span> Clientes CRM</div>
       <div class="nav-item" id="navSmartStock" onclick="showView('smartstock',this)" style="display:none;"><span class="nav-icon">🧠</span> Stock Inteligente <span class="nav-count" id="navSmartCount" style="background:rgba(251,146,60,0.2);color:#fb923c;">0</span></div>
@@ -1841,6 +1850,7 @@ function showView(name, el) {
   if (name==='ranking') { renderRanking(); }
   if (name==='crm') { loadClientes(); }
   if (name==='clientes') { loadClientes(); }
+  if (name==='cotizador') { poblarSelectsCotizador(); calcularCotizacion(); }
   if (name==='ventas') {
     const btnNV = document.getElementById('btnNuevaVenta');
     if (btnNV) btnNV.style.display = isVendedor() ? 'block' : 'none';
@@ -5531,6 +5541,227 @@ async function procesarRutaPdfs(input) {
     + '</div>';
 }
 
+
+// ══════════════════════════════════════════
+// COTIZADOR BARRAS CARDÁNICAS
+// ══════════════════════════════════════════
+const CARDANICAS = {
+  modelos: ['K518','K521','K514','K526'],
+  crucetas: {
+    'K518': { codigo:'2005', desc:'K518 Rodillo 30.18x92mm', precio:21625 },
+    'K521': { codigo:'2001', desc:'K521 Rodillo 27x81.75mm', precio:17500 },
+    'K514': { codigo:'2008', desc:'K514 Rodillo 38x57mm',    precio:37000 },
+    'K526': { codigo:'2009', desc:'K526 Rodillo 23.83x61.25mm', precio:13812 }
+  },
+  horquillas: {
+    'K518': [
+      { codigo:'2040350000', desc:'K518 C/Seguro Bolita Z06', precio:51128 },
+      { codigo:'2040350001', desc:'K518 C/Seguro Bolita Z21', precio:52445 },
+      { codigo:'2040352002', desc:'K518 P/Soldar Trilobular EXT', precio:35747 },
+      { codigo:'2040352003', desc:'K518 P/Soldar Trilobular INT', precio:35747 },
+      { codigo:'2040353100', desc:'K518 Lisa Ø30mm CH.8x4', precio:39025 },
+      { codigo:'2040353001', desc:'K518 Lisa Ø30mm INTERIOR', precio:34466 },
+      { codigo:'2040353102', desc:'K518 Lisa Ø35mm CH.8x4', precio:39025 },
+      { codigo:'2040353103', desc:'K518 Lisa Ø40mm CH.8x4', precio:39162 },
+    ],
+    'K521': [
+      { codigo:'2040250000', desc:'K521 C/Seguro Bolita Z06', precio:47503 },
+      { codigo:'2040250001', desc:'K521 C/Seguro Bolita Z21', precio:48819 },
+      { codigo:'2040252002', desc:'K521 P/Soldar Trilobular EXT', precio:35359 },
+      { codigo:'2040252003', desc:'K521 P/Soldar Trilobular INT', precio:35359 },
+      { codigo:'2040253101', desc:'K521 Lisa Ø30mm CH.6x3', precio:39067 },
+      { codigo:'2040253001', desc:'K521 Lisa Ø30mm INTERIOR', precio:34280 },
+    ],
+    'K514': [
+      { codigo:'2040450000', desc:'K514 C/Seguro Bolita Z06', precio:57440 },
+      { codigo:'2040450001', desc:'K514 C/Seguro Bolita Z21', precio:58755 },
+      { codigo:'2040452002', desc:'K514 P/Soldar Trilobular EXT', precio:43708 },
+      { codigo:'2040452003', desc:'K514 P/Soldar Trilobular INT', precio:43708 },
+      { codigo:'2040453101', desc:'K514 Lisa Ø35mm CH.8x4', precio:48646 },
+      { codigo:'2040453102', desc:'K514 Lisa Ø40mm CH.8x4', precio:49220 },
+    ],
+    'K526': [
+      { codigo:'2040150000', desc:'K526 C/Seguro Bolita Z06', precio:39721 },
+      { codigo:'2040150001', desc:'K526 C/Seguro Bolita Z21', precio:40982 },
+      { codigo:'2040152002', desc:'K526 P/Soldar Trilobular EXT', precio:25593 },
+      { codigo:'2040153101', desc:'K526 Lisa Ø25mm CH.6x3', precio:30485 },
+      { codigo:'2040153001', desc:'K526 Lisa Ø25mm INTERIOR', precio:25806 },
+    ]
+  },
+  tubos: {
+    'K518': [
+      { codigo:'TT4139', desc:'K518 INTERIOR (41x3.90) — precio x metro', pxm:43629 },
+      { codigo:'TT4937', desc:'K518/K514 EXT (49.2x3.75) — precio x metro', pxm:53419 },
+    ],
+    'K521': [
+      { codigo:'TT3344', desc:'K521 INTERIOR (36.1x4.50) — precio x metro', pxm:37973 },
+      { codigo:'TT4133', desc:'K521 EXTERIOR (43x3.30) — precio x metro', pxm:50138 },
+    ],
+    'K514': [
+      { codigo:'TT4154', desc:'K514 INTERIOR (41x5.40) — precio x metro', pxm:57761 },
+      { codigo:'TT4937', desc:'K518/K514 EXT (49.2x3.75) — precio x metro', pxm:53419 },
+    ],
+    'K526': [
+      { codigo:'TT2740', desc:'K526 INTERIOR (29x4.00) — precio x metro', pxm:25636 },
+      { codigo:'TT3331', desc:'K526 EXTERIOR (36.1x3.10) — precio x metro', pxm:36774 },
+    ]
+  },
+  blindajes: {
+    'K518': [
+      { codigo:'2060100104', desc:'Blindaje Ø81/75 500mm', precio:56277 },
+      { codigo:'2060100105', desc:'Blindaje Ø81/75 600mm', precio:56277 },
+      { codigo:'2060100106', desc:'Blindaje Ø81/75 700mm', precio:56277 },
+      { codigo:'2060100107', desc:'Blindaje Ø81/75 800mm', precio:58330 },
+      { codigo:'2060100108', desc:'Blindaje Ø81/75 900mm', precio:60384 },
+      { codigo:'2060100109', desc:'Blindaje Ø81/75 1000mm', precio:62530 },
+      { codigo:'2060100111', desc:'Blindaje Ø81/75 1200mm', precio:66267 },
+      { codigo:'2060100113', desc:'Blindaje Ø81/75 1400mm', precio:70022 },
+      { codigo:'2060100115', desc:'Blindaje Ø81/75 1600mm', precio:73778 },
+    ],
+    'K521': [
+      { codigo:'2060100104', desc:'Blindaje Ø81/75 500mm', precio:56277 },
+      { codigo:'2060100107', desc:'Blindaje Ø81/75 800mm', precio:58330 },
+      { codigo:'2060100109', desc:'Blindaje Ø81/75 1000mm', precio:62530 },
+      { codigo:'2060100111', desc:'Blindaje Ø81/75 1200mm', precio:66267 },
+    ],
+    'K514': [
+      { codigo:'2060100104', desc:'Blindaje Ø81/75 500mm', precio:56277 },
+      { codigo:'2060100107', desc:'Blindaje Ø81/75 800mm', precio:58330 },
+      { codigo:'2060100109', desc:'Blindaje Ø81/75 1000mm', precio:62530 },
+      { codigo:'2060100111', desc:'Blindaje Ø81/75 1200mm', precio:66267 },
+    ],
+    'K526': [
+      { codigo:'2060000103', desc:'Blindaje Ø63/58 500mm', precio:21876 },
+      { codigo:'2060000104', desc:'Blindaje Ø63/58 600mm', precio:23869 },
+      { codigo:'2060000105', desc:'Blindaje Ø63/58 700mm', precio:25860 },
+      { codigo:'2060000106', desc:'Blindaje Ø63/58 800mm', precio:27851 },
+      { codigo:'2060000108', desc:'Blindaje Ø63/58 1000mm', precio:31833 },
+      { codigo:'2060000110', desc:'Blindaje Ø63/58 1200mm', precio:35814 },
+    ]
+  }
+};
+
+let cModeloActual = 'K518';
+
+function selModelo(modelo, btn) {
+  cModeloActual = modelo;
+  document.querySelectorAll('.c-modelo-btn').forEach(b => b.classList.remove('c-selected'));
+  btn.classList.add('c-selected');
+  poblarSelectsCotizador();
+  calcularCotizacion();
+}
+
+function poblarSelectsCotizador() {
+  const m = cModeloActual;
+
+  // Horquillas
+  ['cHorqTractor','cHorqImplemento'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = (CARDANICAS.horquillas[m] || []).map(h =>
+      `<option value="${h.precio}">${h.desc} — $${h.precio.toLocaleString('es-AR')}</option>`
+    ).join('');
+  });
+
+  // Tubos
+  const selTubo = document.getElementById('cTubo');
+  if (selTubo) {
+    selTubo.innerHTML = (CARDANICAS.tubos[m] || []).map(t =>
+      `<option value="${t.pxm}">${t.desc}</option>`
+    ).join('');
+  }
+
+  // Blindajes
+  const selBlind = document.getElementById('cBlindaje');
+  if (selBlind) {
+    selBlind.innerHTML = '<option value="">Sin blindaje</option>' +
+      (CARDANICAS.blindajes[m] || []).map(b =>
+        `<option value="${b.precio}">${b.desc} — $${b.precio.toLocaleString('es-AR')}</option>`
+      ).join('');
+  }
+}
+
+function calcularCotizacion() {
+  const m = cModeloActual;
+  const cruceta = CARDANICAS.crucetas[m];
+  const pHorqTractor = parseFloat(document.getElementById('cHorqTractor')?.value) || 0;
+  const pHorqImpl = parseFloat(document.getElementById('cHorqImplemento')?.value) || 0;
+  const longitud = parseFloat(document.getElementById('cLongitud')?.value) || 1000;
+  const pxm = parseFloat(document.getElementById('cTubo')?.value) || 0;
+  const pBlindaje = parseFloat(document.getElementById('cBlindaje')?.value) || 0;
+  const manoObra = parseFloat(document.getElementById('cManoObra')?.value) || 0;
+  const margen = parseFloat(document.getElementById('cMargen')?.value) || 30;
+  const tipoCambio = parseFloat(document.getElementById('cTipoCambio')?.value) || 1200;
+  const conIVA = document.getElementById('cConIVA')?.value === 'si';
+
+  if (!cruceta) return;
+
+  // Costo de materiales
+  const pCruceta = cruceta.precio * 2; // 2 crucetas por barra
+  const pTubo = pxm * (longitud / 1000);
+  const costoMateriales = pCruceta + pHorqTractor + pHorqImpl + pTubo + pBlindaje;
+  const costoTotal = costoMateriales + manoObra;
+
+  // Precio de venta con margen
+  const precioSinIVA = costoTotal * (1 + margen / 100);
+  const precioConIVA = precioSinIVA * 1.21;
+  const precioFinal = conIVA ? precioConIVA : precioSinIVA;
+  const precioUSD = precioFinal / tipoCambio;
+
+  // Mostrar desglose
+  const desglose = document.getElementById('cDesglose');
+  const horqTractorDesc = document.getElementById('cHorqTractor')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const horqImplDesc = document.getElementById('cHorqImplemento')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const tuboDesc = document.getElementById('cTubo')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const blindDesc = document.getElementById('cBlindaje')?.selectedOptions[0]?.text || 'Sin blindaje';
+
+  desglose.innerHTML = [
+    ['🔩 Crucetas (x2) — ' + cruceta.desc, pCruceta],
+    ['🔧 Horquilla tractor — ' + horqTractorDesc, pHorqTractor],
+    ['🔧 Horquilla implemento — ' + horqImplDesc, pHorqImpl],
+    ['📏 Tubo ' + longitud + 'mm — ' + tuboDesc, Math.round(pTubo)],
+    pBlindaje ? ['🛡️ Blindaje — ' + blindDesc, pBlindaje] : null,
+    ['👨‍🔧 Mano de obra', manoObra],
+  ].filter(Boolean).map(([label, val]) =>
+    `<div class="c-linea"><span class="c-linea-label">${label}</span><span class="c-linea-val">$${Math.round(val).toLocaleString('es-AR')}</span></div>`
+  ).join('') +
+  `<div class="c-linea" style="margin-top:6px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.1);">
+    <span class="c-linea-label" style="color:var(--text2);">Costo total materiales + MO</span>
+    <span class="c-linea-val">$${Math.round(costoTotal).toLocaleString('es-AR')}</span>
+  </div>
+  <div class="c-linea">
+    <span class="c-linea-label" style="color:var(--text2);">Margen ${margen}%</span>
+    <span class="c-linea-val">$${Math.round(precioSinIVA - costoTotal).toLocaleString('es-AR')}</span>
+  </div>`;
+
+  document.getElementById('cPrecioFinal').textContent = '$' + Math.round(precioFinal).toLocaleString('es-AR') + (conIVA ? ' (c/IVA)' : ' (s/IVA)');
+  document.getElementById('cPrecioUSD').textContent = '≈ USD ' + precioUSD.toFixed(0) + ' al tipo de cambio $' + tipoCambio.toLocaleString('es-AR');
+  document.getElementById('cResultado').style.display = 'block';
+}
+
+function copiarCotizacion() {
+  const m = cModeloActual;
+  const horqT = document.getElementById('cHorqTractor')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const horqI = document.getElementById('cHorqImplemento')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const longitud = document.getElementById('cLongitud')?.value || '';
+  const tubo = document.getElementById('cTubo')?.selectedOptions[0]?.text.split('—')[0].trim() || '';
+  const precio = document.getElementById('cPrecioFinal')?.textContent || '';
+  const precioUSD = document.getElementById('cPrecioUSD')?.textContent || '';
+
+  const texto = `🔧 COTIZACIÓN BARRA CARDÁNICA FR AGRO
+Modelo: ${m}
+Horquilla tractor: ${horqT}
+Horquilla implemento: ${horqI}
+Tubo: ${tubo} — ${longitud}mm
+Precio: ${precio}
+${precioUSD}
+
+FR AGRO Rodríguez y Cía — Tel: 3472 54-2298`;
+
+  navigator.clipboard.writeText(texto).then(() => showToast('✅ Cotización copiada')).catch(() => showToast('❌ Error al copiar'));
+}
+
+// Inicializar cotizador cuando se abre la vista
 function esLogisticaPropia(transporte) {
   return transporte && transporte.includes('Zona propia');
 }
@@ -5568,6 +5799,103 @@ function abrirFormDespacho() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelector('.img-lightbox')?.remove(); } });
 
 </script>
+
+<!-- ===== COTIZADOR BARRAS CARDÁNICAS ===== -->
+<div class="view" id="view-cotizador">
+  <div class="page-header">
+    <div>
+      <div class="page-title">🔧 Cotizador de Barras Cardánicas</div>
+      <div class="page-sub">Armá el precio de una barra completa seleccionando sus componentes</div>
+    </div>
+  </div>
+
+  <!-- Configuración de precios -->
+  <div style="background:#112240;border:1px solid rgba(57,255,20,0.2);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:10px;">⚙️ Parámetros de Precio</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Mano de obra ($)</label>
+        <input type="number" id="cManoObra" value="15000" min="0" oninput="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Margen de ganancia (%)</label>
+        <input type="number" id="cMargen" value="30" min="0" max="100" oninput="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Tipo de cambio ($/USD)</label>
+        <input type="number" id="cTipoCambio" value="1200" min="1" oninput="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">¿Incluye IVA en precio final?</label>
+        <select id="cConIVA" onchange="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;">
+          <option value="si">Sí — precio con IVA</option>
+          <option value="no">No — precio sin IVA</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Selector de modelo -->
+  <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">1️⃣ Modelo de Cruceta</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;" id="cModeloBtns">
+      <button onclick="selModelo('K518',this)" class="c-modelo-btn c-selected">K518</button>
+      <button onclick="selModelo('K521',this)" class="c-modelo-btn">K521</button>
+      <button onclick="selModelo('K514',this)" class="c-modelo-btn">K514</button>
+      <button onclick="selModelo('K526',this)" class="c-modelo-btn">K526</button>
+    </div>
+  </div>
+
+  <!-- Horquilla lado tractor -->
+  <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">2️⃣ Horquilla Lado Tractor</div>
+    <select id="cHorqTractor" onchange="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;"></select>
+  </div>
+
+  <!-- Horquilla lado implemento -->
+  <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">3️⃣ Horquilla Lado Implemento</div>
+    <select id="cHorqImplemento" onchange="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;"></select>
+  </div>
+
+  <!-- Longitud tubo -->
+  <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">4️⃣ Longitud del Tubo</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Longitud (mm)</label>
+        <input type="number" id="cLongitud" value="1000" min="300" max="2000" step="100" oninput="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;">Tipo de tubo</label>
+        <select id="cTubo" onchange="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:13px;"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blindaje opcional -->
+  <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">5️⃣ Blindaje (opcional)</div>
+    <select id="cBlindaje" onchange="calcularCotizacion()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;">
+      <option value="">Sin blindaje</option>
+    </select>
+  </div>
+
+  <!-- Resultado -->
+  <div id="cResultado" style="background:rgba(57,255,20,0.05);border:2px solid rgba(57,255,20,0.3);border-radius:12px;padding:20px;display:none;">
+    <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:14px;">💰 Cotización</div>
+    <div id="cDesglose" style="margin-bottom:16px;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(57,255,20,0.2);padding-top:14px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:12px;color:var(--text3);">PRECIO FINAL AL CLIENTE</div>
+        <div id="cPrecioFinal" style="font-size:28px;font-weight:800;color:var(--accent);"></div>
+        <div id="cPrecioUSD" style="font-size:12px;color:var(--text3);margin-top:2px;"></div>
+      </div>
+      <button onclick="copiarCotizacion()" style="padding:12px 24px;background:rgba(57,255,20,0.15);border:1px solid rgba(57,255,20,0.4);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">📋 Copiar Cotización</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== MODAL SALUDO / BIENVENIDA ===== -->
 <div id="saludoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:linear-gradient(135deg,#0d1b2a,#112240);border:1px solid var(--accent);border-radius:20px;padding:40px;max-width:420px;width:90%;text-align:center;box-shadow:0 0 60px rgba(57,255,20,0.2);animation:fadeInUp 0.4s ease;">
