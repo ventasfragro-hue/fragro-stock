@@ -451,6 +451,8 @@
       <div class="nav-item" onclick="showView('addProduct',this)"><span class="nav-icon">➕</span> Agregar Producto</div>
       <div class="nav-item" onclick="showView('ranking',this)"><span class="nav-icon">🏆</span> Ranking Ventas</div>
       <div class="nav-item" onclick="showView('cotizador',this)"><span class="nav-icon">🔧</span> Cotizador Cardánicas</div>
+      <div class="nav-item" onclick="showView('buscador',this)"><span class="nav-icon">🔍</span> Buscador</div>
+      <div class="nav-item" onclick="showView('graficos',this)"><span class="nav-icon">📈</span> Gráficos</div>
       <div class="nav-item" onclick="showView('clientes',this)"><span class="nav-icon">👥</span> Clientes <span class="nav-count" id="navClientes" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
       <div class="nav-item" onclick="showView('crm',this)"><span class="nav-icon">👥</span> Clientes CRM</div>
       <div class="nav-item" id="navSmartStock" onclick="showView('smartstock',this)" style="display:none;"><span class="nav-icon">🧠</span> Stock Inteligente <span class="nav-count" id="navSmartCount" style="background:rgba(251,146,60,0.2);color:#fb923c;">0</span></div>
@@ -1851,6 +1853,8 @@ function showView(name, el) {
   if (name==='crm') { loadClientes(); }
   if (name==='clientes') { loadClientes(); }
   if (name==='cotizador') { poblarSelectsCotizador(); calcularCotizacion(); }
+  if (name==='buscador') { setTimeout(()=>document.getElementById('buscadorInput')?.focus(),100); }
+  if (name==='graficos') { renderGraficoTab('ventas'); }
   if (name==='ventas') {
     const btnNV = document.getElementById('btnNuevaVenta');
     if (btnNV) btnNV.style.display = isVendedor() ? 'block' : 'none';
@@ -5793,6 +5797,359 @@ FR AGRO Rodríguez y Cía — Tel: 3472 54-2298`;
 }
 
 // Inicializar cotizador cuando se abre la vista
+
+// ══════════════════════════════════════════
+// BUSCADOR GENERAL
+// ══════════════════════════════════════════
+function ejecutarBusqueda() {
+  const q = (document.getElementById('buscadorInput')?.value || '').toLowerCase().trim();
+  const cont = document.getElementById('buscadorResultados');
+  if (!cont) return;
+
+  if (q.length < 2) {
+    cont.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">Escribí al menos 2 caracteres para buscar</div>';
+    document.getElementById('buscadorSub').textContent = 'Buscá en ventas, despachos, clientes, stock y pedidos';
+    return;
+  }
+
+  const resultados = [];
+
+  // Buscar en ventas
+  (ventas||[]).forEach(v => {
+    if ((v.numero||'').toLowerCase().includes(q) || (v.cliente||'').toLowerCase().includes(q) ||
+        (v.nota||'').toLowerCase().includes(q)) {
+      resultados.push({ tipo:'venta', icono:'📝', titulo:'Venta #'+v.numero, sub: v.cliente + ' — $'+parseFloat(v.monto||0).toLocaleString('es-AR'), badge: v.estado, id: v.id });
+    }
+  });
+
+  // Buscar en despachos
+  (despachos||[]).forEach(d => {
+    if ((d.destinatario||'').toLowerCase().includes(q) || (d.detalle||'').toLowerCase().includes(q) ||
+        (d.transporte||'').toLowerCase().includes(q)) {
+      resultados.push({ tipo:'despacho', icono:'🚚', titulo: d.transporte + ' → ' + d.destinatario, sub: d.fecha_despacho + ' — ' + d.detalle?.substring(0,60), badge: d.estado, id: d.id });
+    }
+  });
+
+  // Buscar en stock
+  (products||[]).forEach(p => {
+    if ((p.code||'').toLowerCase().includes(q) || (p.desc||'').toLowerCase().includes(q) ||
+        (p.rubro||'').toLowerCase().includes(q)) {
+      resultados.push({ tipo:'producto', icono:'📦', titulo:'['+p.code+'] '+p.desc, sub: p.rubro + ' — Stock: '+p.stock, badge: p.stock <= 0 ? 'sin stock' : p.stock <= (p.min||0) ? 'crítico' : 'ok', id: p.id });
+    }
+  });
+
+  // Buscar en pedidos
+  (pedidos||[]).forEach(p => {
+    if ((p.producto||'').toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q) ||
+        (p.proveedor||'').toLowerCase().includes(q)) {
+      resultados.push({ tipo:'pedido', icono:'📋', titulo: p.producto, sub: 'Proveedor: '+(p.proveedor||'—')+' — Qty: '+p.qty, badge: p.estado, id: p.id });
+    }
+  });
+
+  // Buscar en clientes CRM
+  (clientes||[]).forEach(c => {
+    if ((c.nombre||'').toLowerCase().includes(q) || (c.cuit||'').toLowerCase().includes(q) ||
+        (c.telefono||'').toLowerCase().includes(q) || (c.localidad||'').toLowerCase().includes(q)) {
+      const alertas = [];
+      if (c.en_mora) alertas.push('🚫 MORA');
+      if (c.cheques_rebotados) alertas.push('⚠️ CHEQUES');
+      resultados.push({ tipo:'cliente', icono:'👥', titulo: c.nombre, sub: (c.localidad||'')+(c.provincia?', '+c.provincia:'')+(c.telefono?' — '+c.telefono:''), badge: alertas.join(' ') || 'ok', id: c.id });
+    }
+  });
+
+  document.getElementById('buscadorSub').textContent = resultados.length + ' resultado' + (resultados.length !== 1?'s':'') + ' para "' + q + '"';
+
+  if (resultados.length === 0) {
+    cont.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text3);">No se encontraron resultados para "'+q+'"</div>';
+    return;
+  }
+
+  const colores = { venta:'#60a5fa', despacho:'#fbbf24', producto:'#39FF14', pedido:'#fb923c', cliente:'#a78bfa' };
+  const badgeColors = { 'cobrado':'#39FF14','pendiente_cobro':'#fbbf24','para_aprobar':'#f59e0b','despachado':'#39FF14','ok':'#39FF14','sin stock':'#ef4444','crítico':'#f59e0b','MORA':'#ef4444' };
+
+  cont.innerHTML = resultados.slice(0,50).map(r => {
+    const color = colores[r.tipo] || '#aaa';
+    const badgeColor = badgeColors[r.badge] || '#aaa';
+    return `<div style="background:#112240;border:1px solid ${color}33;border-left:3px solid ${color};border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="irA('${r.tipo}','${r.id}')">
+      <span style="font-size:20px;">${r.icono}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.titulo}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.sub}</div>
+      </div>
+      <span style="background:${badgeColor}22;color:${badgeColor};border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;white-space:nowrap;">${r.badge}</span>
+    </div>`;
+  }).join('');
+}
+
+function irA(tipo, id) {
+  const navMap = { venta:'ventas', despacho:'despachos', producto:'stock', pedido:'pedidos', cliente:'clientes' };
+  const vista = navMap[tipo];
+  if (vista) {
+    const navBtn = document.querySelector(`.nav-item[onclick*="'${vista}'"]`);
+    showView(vista, navBtn);
+  }
+}
+
+// ══════════════════════════════════════════
+// GRÁFICOS AVANZADOS
+// ══════════════════════════════════════════
+let graficosInstancias = {};
+
+function switchGraficoTab(tab, btn) {
+  document.querySelectorAll('#view-graficos .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  ['ventas','stock','logistica','clientes'].forEach(t => {
+    const el = document.getElementById('gTab-'+t);
+    if (el) el.style.display = t === tab ? 'block' : 'none';
+  });
+  renderGraficoTab(tab);
+}
+
+function renderGraficoTab(tab) {
+  if (tab === 'ventas') renderGraficosVentas();
+  if (tab === 'stock') renderGraficosStock();
+  if (tab === 'logistica') renderGraficosLogistica();
+  if (tab === 'clientes') renderGraficosClientes();
+}
+
+function mkChart(id, type, labels, datasets, opts={}) {
+  if (graficosInstancias[id]) { graficosInstancias[id].destroy(); }
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return;
+  graficosInstancias[id] = new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color:'#aaa', font:{size:11} } } },
+      scales: type !== 'pie' && type !== 'doughnut' ? {
+        x: { ticks:{color:'#aaa',font:{size:10}}, grid:{color:'rgba(255,255,255,0.05)'} },
+        y: { ticks:{color:'#aaa',font:{size:10}}, grid:{color:'rgba(255,255,255,0.05)'} }
+      } : {},
+      ...opts
+    }
+  });
+}
+
+function renderGraficosVentas() {
+  // Ventas cobradas por mes (últimos 6 meses)
+  const meses = [];
+  const hoy = new Date();
+  for (let i=5; i>=0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
+    meses.push({ label: d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'}), año: d.getFullYear(), mes: d.getMonth() });
+  }
+  const ventasCobradas = ventas.filter(v => v.estado === 'cobrado');
+  const montosMes = meses.map(m => {
+    return ventasCobradas.filter(v => {
+      const f = new Date(v.fecha);
+      return f.getFullYear() === m.año && f.getMonth() === m.mes;
+    }).reduce((s,v) => s + parseFloat(v.monto||0), 0);
+  });
+  mkChart('gVentasMes','bar', meses.map(m=>m.label), [{
+    label:'Monto cobrado ($)', data: montosMes,
+    backgroundColor:'rgba(57,255,20,0.5)', borderColor:'#39FF14', borderWidth:1
+  }]);
+
+  // Forma de cobro
+  const formas = {};
+  ventasCobradas.forEach(v => { formas[v.tipo||'Otro'] = (formas[v.tipo||'Otro']||0) + 1; });
+  mkChart('gFormaCobro','doughnut', Object.keys(formas), [{
+    data: Object.values(formas),
+    backgroundColor:['#60a5fa','#39FF14','#fbbf24','#f59e0b','#a78bfa','#34d399']
+  }]);
+
+  // Ventas por vendedor (monto)
+  const vendedores = {};
+  ventasCobradas.forEach(v => { vendedores[v.vendedor||'?'] = (vendedores[v.vendedor||'?']||0) + parseFloat(v.monto||0); });
+  mkChart('gVendedorMonto','bar', Object.keys(vendedores), [{
+    label:'Monto cobrado', data: Object.values(vendedores),
+    backgroundColor:['#60a5fa','#39FF14','#fbbf24','#a78bfa']
+  }]);
+
+  // Deuda pendiente por vendedor
+  const deudas = {};
+  ventas.filter(v=>v.estado==='pendiente_cobro').forEach(v => {
+    deudas[v.vendedor||'?'] = (deudas[v.vendedor||'?']||0) + parseFloat(v.monto||0);
+  });
+  mkChart('gDeudaVendedor','bar', Object.keys(deudas), [{
+    label:'Deuda pendiente', data: Object.values(deudas),
+    backgroundColor:'rgba(251,191,36,0.5)', borderColor:'#fbbf24', borderWidth:1
+  }]);
+
+  // Top 10 productos más vendidos
+  const prodVendidos = {};
+  history.filter(h=>h.tipo==='sale').forEach(h => {
+    prodVendidos[h.descripcion||'?'] = (prodVendidos[h.descripcion||'?']||0) + parseFloat(h.qty||0);
+  });
+  const top10 = Object.entries(prodVendidos).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const cont = document.getElementById('gTopProductos');
+  if (cont) cont.innerHTML = top10.map(([desc,qty],i) =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <span style="font-size:11px;color:var(--text3);width:16px;">${i+1}</span>
+      <div style="flex:1;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${desc}</div>
+      <span style="font-size:12px;font-weight:700;color:var(--accent);">${qty} u.</span>
+    </div>`
+  ).join('') || '<div style="color:var(--text3);font-size:12px;">Sin datos</div>';
+}
+
+function renderGraficosStock() {
+  // Stock por rubro
+  const rubros = {};
+  products.forEach(p => { rubros[p.rubro||'Otros'] = (rubros[p.rubro||'Otros']||0) + (p.stock||0); });
+  const topRubros = Object.entries(rubros).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  mkChart('gStockRubro','bar', topRubros.map(r=>r[0].substring(0,15)), [{
+    label:'Stock total', data: topRubros.map(r=>r[1]),
+    backgroundColor:'rgba(57,255,20,0.4)', borderColor:'#39FF14', borderWidth:1
+  }]);
+
+  // Productos bajo mínimo
+  const bajos = products.filter(p => p.min > 0 && p.stock <= p.min).slice(0,10);
+  const contBajo = document.getElementById('gBajoMinimo');
+  if (contBajo) contBajo.innerHTML = bajos.length === 0
+    ? '<div style="color:#39FF14;font-size:12px;padding:20px 0;">✅ Todos los productos están sobre el mínimo</div>'
+    : bajos.map(p =>
+        `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;">
+          <span style="color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">[${p.code}] ${p.desc}</span>
+          <span style="color:#ef4444;font-weight:700;margin-left:8px;">${p.stock}/${p.min}</span>
+        </div>`
+      ).join('');
+
+  // Movimientos últimos 30 días
+  const hace30 = new Date(); hace30.setDate(hace30.getDate()-30);
+  const dias = []; const entradas = []; const salidas = [];
+  for (let i=29; i>=0; i--) {
+    const d = new Date(); d.setDate(d.getDate()-i);
+    const label = d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'});
+    const dayStr = d.toLocaleDateString('es-AR');
+    dias.push(label);
+    const mov = history.filter(h => new Date(h.fecha).toLocaleDateString('es-AR') === dayStr);
+    entradas.push(mov.filter(h=>h.tipo==='buy').reduce((s,h)=>s+parseFloat(h.qty||0),0));
+    salidas.push(mov.filter(h=>h.tipo==='sale').reduce((s,h)=>s+parseFloat(h.qty||0),0));
+  }
+  mkChart('gMovimientos','line', dias, [
+    { label:'Entradas', data:entradas, borderColor:'#39FF14', backgroundColor:'rgba(57,255,20,0.1)', tension:0.3, fill:true },
+    { label:'Salidas', data:salidas, borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,0.1)', tension:0.3, fill:true }
+  ]);
+}
+
+function renderGraficosLogistica() {
+  // Despachos por transportista
+  const transp = {};
+  despachos.forEach(d => { transp[d.transporte||'?'] = (transp[d.transporte||'?']||0)+1; });
+  const topTransp = Object.entries(transp).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  mkChart('gTransportista','doughnut', topTransp.map(t=>t[0].substring(0,20)), [{
+    data: topTransp.map(t=>t[1]),
+    backgroundColor:['#60a5fa','#39FF14','#fbbf24','#a78bfa','#f97316','#34d399','#ef4444','#e879f9']
+  }]);
+
+  // Km logística propia por mes
+  const meses = [];
+  const hoy = new Date();
+  for (let i=5; i>=0; i--) {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth()-i, 1);
+    meses.push({ label: d.toLocaleDateString('es-AR',{month:'short',year:'2-digit'}), año: d.getFullYear(), mes: d.getMonth() });
+  }
+  const kmMes = meses.map(m =>
+    despachos.filter(d => {
+      if (!d.km_recorridos || !esLogisticaPropia(d.transporte)) return false;
+      const f = new Date(d.fecha_despacho);
+      return f.getFullYear()===m.año && f.getMonth()===m.mes;
+    }).reduce((s,d)=>s+(d.km_recorridos||0),0)
+  );
+  mkChart('gKmMes','bar', meses.map(m=>m.label), [{
+    label:'Km recorridos', data:kmMes,
+    backgroundColor:'rgba(167,139,250,0.5)', borderColor:'#a78bfa', borderWidth:1
+  }]);
+
+  // Despachos por mes
+  const despMes = meses.map(m =>
+    despachos.filter(d => {
+      const f = new Date(d.fecha_despacho);
+      return f.getFullYear()===m.año && f.getMonth()===m.mes;
+    }).length
+  );
+  mkChart('gDespachosMes','bar', meses.map(m=>m.label), [{
+    label:'Despachos', data:despMes,
+    backgroundColor:'rgba(251,191,36,0.5)', borderColor:'#fbbf24', borderWidth:1
+  }]);
+}
+
+function renderGraficosClientes() {
+  // Top 10 clientes por monto
+  const montoCliente = {};
+  ventas.filter(v=>v.estado==='cobrado').forEach(v => {
+    montoCliente[v.cliente||'?'] = (montoCliente[v.cliente||'?']||0) + parseFloat(v.monto||0);
+  });
+  const top10 = Object.entries(montoCliente).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const contTop = document.getElementById('gTopClientes');
+  if (contTop) contTop.innerHTML = top10.map(([nombre,monto],i) =>
+    `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <span style="font-size:11px;color:var(--text3);width:16px;">${i+1}</span>
+      <div style="flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
+      <span style="font-size:12px;font-weight:700;color:#60a5fa;">$${(monto/1000).toFixed(0)}k</span>
+    </div>`
+  ).join('') || '<div style="color:var(--text3);font-size:12px;">Sin datos</div>';
+
+  // Selector de clientes para ver sus productos
+  const sel = document.getElementById('gClienteSelector');
+  if (sel) {
+    const nombresUnicos = [...new Set(ventas.map(v=>v.cliente).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">— Seleccioná un cliente —</option>' +
+      nombresUnicos.map(n=>`<option value="${n}">${n}</option>`).join('');
+  }
+
+  // Clientes por zona
+  const zonas = {};
+  clientes.forEach(c => {
+    const z = c.provincia || c.localidad || 'Sin zona';
+    zonas[z] = (zonas[z]||0)+1;
+  });
+  const contZona = document.getElementById('gClientesZona');
+  if (contZona) {
+    const total = Object.values(zonas).reduce((s,v)=>s+v,0);
+    contZona.innerHTML = Object.entries(zonas).sort((a,b)=>b[1]-a[1]).map(([zona,cant]) =>
+      `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="font-size:12px;color:var(--text);width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${zona}</div>
+        <div style="flex:1;background:rgba(255,255,255,0.05);border-radius:4px;height:8px;overflow:hidden;">
+          <div style="background:#a78bfa;height:100%;width:${(cant/total*100).toFixed(0)}%;border-radius:4px;"></div>
+        </div>
+        <span style="font-size:11px;color:var(--text3);width:30px;text-align:right;">${cant}</span>
+      </div>`
+    ).join('') || '<div style="color:var(--text3);font-size:12px;">Sin clientes en CRM</div>';
+  }
+}
+
+function renderProductosCliente() {
+  const cliente = document.getElementById('gClienteSelector')?.value;
+  const cont = document.getElementById('gProductosClienteLista');
+  if (!cont || !cliente) return;
+  const prods = {};
+  history.filter(h=>h.tipo==='sale' && h.usuario && ventas.find(v=>v.cliente===cliente && v.vendedor===h.usuario)).forEach(h => {
+    prods[h.descripcion||'?'] = (prods[h.descripcion||'?']||0) + parseFloat(h.qty||0);
+  });
+  // También buscar en checklist de ventas
+  ventas.filter(v=>v.cliente===cliente && v.checklist).forEach(v => {
+    try {
+      const items = typeof v.checklist === 'string' ? JSON.parse(v.checklist) : [];
+      items.forEach(item => {
+        const t = item.texto || '';
+        const m = t.match(/^(\d+)x\s+(.+?)\s+\[/);
+        if (m) prods[m[2]] = (prods[m[2]]||0) + parseInt(m[1]);
+      });
+    } catch(e) {}
+  });
+  const top = Object.entries(prods).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  cont.innerHTML = top.length === 0
+    ? '<div style="color:var(--text3);font-size:12px;">Sin historial de productos para este cliente</div>'
+    : top.map(([desc,qty]) =>
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;">
+          <span style="color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}</span>
+          <span style="color:var(--accent);font-weight:700;margin-left:8px;">${qty} u.</span>
+        </div>`
+      ).join('');
+}
+
 function esLogisticaPropia(transporte) {
   return transporte && transporte.includes('Zona propia');
 }
@@ -5923,6 +6280,126 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.q
         <div id="cPrecioUSD" style="font-size:12px;color:var(--text3);margin-top:2px;"></div>
       </div>
       <button onclick="copiarCotizacion()" style="padding:12px 24px;background:rgba(57,255,20,0.15);border:1px solid rgba(57,255,20,0.4);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;">📋 Copiar Cotización</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== BUSCADOR GENERAL ===== -->
+<div class="view" id="view-buscador">
+  <div class="page-header">
+    <div>
+      <div class="page-title">🔍 Buscador General</div>
+      <div class="page-sub" id="buscadorSub">Buscá en ventas, despachos, clientes, stock y pedidos</div>
+    </div>
+  </div>
+  <div style="position:relative;margin-bottom:20px;">
+    <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:18px;">🔍</span>
+    <input type="text" id="buscadorInput" placeholder="Escribí nombre de cliente, número de venta, código de producto..." 
+      oninput="ejecutarBusqueda()" autofocus
+      style="width:100%;padding:14px 14px 14px 46px;background:#112240;border:2px solid rgba(57,255,20,0.3);color:#fff;border-radius:12px;font-size:15px;font-family:'DM Sans',sans-serif;box-sizing:border-box;">
+  </div>
+  <div id="buscadorResultados"></div>
+</div>
+
+<!-- ===== GRÁFICOS AVANZADOS ===== -->
+<div class="view" id="view-graficos">
+  <div class="page-header">
+    <div>
+      <div class="page-title">📈 Gráficos y Análisis</div>
+      <div class="page-sub">Rendimiento comercial, stock y logística</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="pedido-tabs" style="margin-bottom:20px;">
+    <button class="tab-btn active" onclick="switchGraficoTab('ventas',this)">💰 Ventas</button>
+    <button class="tab-btn" onclick="switchGraficoTab('stock',this)">📦 Stock</button>
+    <button class="tab-btn" onclick="switchGraficoTab('logistica',this)">🚚 Logística</button>
+    <button class="tab-btn" onclick="switchGraficoTab('clientes',this)">👥 Clientes</button>
+  </div>
+
+  <!-- Panel Ventas -->
+  <div id="gTab-ventas">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:20px;">
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">📅 VENTAS POR MES (últimos 6 meses)</div>
+        <canvas id="gVentasMes" height="180"></canvas>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">🥧 FORMA DE COBRO</div>
+        <canvas id="gFormaCobro" height="180"></canvas>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">👤 VENTAS POR VENDEDOR (monto)</div>
+        <canvas id="gVendedorMonto" height="180"></canvas>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">💸 DEUDA PENDIENTE POR VENDEDOR</div>
+        <canvas id="gDeudaVendedor" height="180"></canvas>
+      </div>
+    </div>
+    <!-- Tabla top productos vendidos -->
+    <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:700;">🏆 TOP 10 PRODUCTOS MÁS VENDIDOS</div>
+      <div id="gTopProductos"></div>
+    </div>
+  </div>
+
+  <!-- Panel Stock -->
+  <div id="gTab-stock" style="display:none;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:20px;">
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">📦 STOCK POR RUBRO</div>
+        <canvas id="gStockRubro" height="200"></canvas>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">⚠️ PRODUCTOS BAJO MÍNIMO</div>
+        <div id="gBajoMinimo"></div>
+      </div>
+    </div>
+    <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:700;">📊 MOVIMIENTOS DE STOCK (últimos 30 días)</div>
+      <canvas id="gMovimientos" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- Panel Logística -->
+  <div id="gTab-logistica" style="display:none;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:20px;">
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">🚚 DESPACHOS POR TRANSPORTISTA</div>
+        <canvas id="gTransportista" height="200"></canvas>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">🚗 LOGÍSTICA PROPIA — KM RECORRIDOS</div>
+        <canvas id="gKmMes" height="200"></canvas>
+      </div>
+    </div>
+    <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:700;">📅 DESPACHOS POR MES</div>
+      <canvas id="gDespachosMes" height="160"></canvas>
+    </div>
+  </div>
+
+  <!-- Panel Clientes -->
+  <div id="gTab-clientes" style="display:none;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:20px;">
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">🏆 TOP 10 CLIENTES POR MONTO</div>
+        <div id="gTopClientes"></div>
+      </div>
+      <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;font-weight:700;">📦 PRODUCTOS MÁS COMPRADOS POR CLIENTE</div>
+        <div id="gProductosCliente" style="margin-bottom:8px;">
+          <select id="gClienteSelector" onchange="renderProductosCliente()" style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:8px;font-size:12px;margin-bottom:10px;"></select>
+          <div id="gProductosClienteLista"></div>
+        </div>
+      </div>
+    </div>
+    <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:700;">📍 CLIENTES POR ZONA</div>
+      <div id="gClientesZona"></div>
     </div>
   </div>
 </div>
