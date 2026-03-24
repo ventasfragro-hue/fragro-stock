@@ -5360,64 +5360,78 @@ async function eliminarDespacho(id) {
 
 // ── OPTIMIZADOR DE RUTA LOGÍSTICA PROPIA ──
 // Distancias aproximadas desde Marcos Juárez (km en línea recta * 1.3 factor ruta)
-const DISTANCIAS_DESDE_MJ = {
-  'MARCOS JUAREZ': 0, 'MARCOS JUÁREZ': 0,
-  'CORDOBA': 160, 'CÓRDOBA': 160,
-  'ROSARIO': 220, 'SANTA FE': 300,
-  'BUENOS AIRES': 530, 'CABA': 530,
-  'VENADO TUERTO': 130, 'RUFINO': 180,
-  'RIO CUARTO': 130, 'RÍO CUARTO': 130,
-  'VILLA MARIA': 80, 'VILLA MARÍA': 80,
-  'BELL VILLE': 40, 'LABOULAYE': 110,
-  'VICUÑA MACKENNA': 100, 'LA CARLOTA': 70,
-  'SAN FRANCISCO': 90, 'JESUS MARIA': 170,
-  'JESÚS MARÍA': 170, 'ALTA GRACIA': 150,
-  'RIO TERCERO': 120, 'RÍO TERCERO': 120,
-  'ARMSTRONG': 150, 'CAÑADA DE GOMEZ': 170,
-  'CAÑADA DE GÓMEZ': 170, 'FIRMAT': 160,
-  'CASILDA': 190, 'PERGAMINO': 390,
-  'TUCUMAN': 780, 'TUCUMÁN': 780,
-  'MENDOZA': 700, 'SAN LUIS': 450,
-  'SANTIAGO DEL ESTERO': 700, 'CHACO': 900,
-  'MISIONES': 1100, 'ENTRE RIOS': 280,
-  'ENTRE RÍOS': 280, 'PARANA': 300, 'PARANÁ': 300,
-  'CONCORDIA': 400, 'GUALEGUAYCHU': 350,
-  'GUALEGUAYCHÚ': 350, 'CALCHAQUI': 420, 'CALCHAQUÍ': 420,
-  // Buenos Aires provincia — zona de Ignacio
-  'VEDIA': 340, 'JUNIN': 360, 'JUNÍN': 360,
-  'LINCOLN': 320, 'TRENQUE LAUQUEN': 400,
-  'PEHUAJO': 380, 'PEHUAJÓ': 380,
-  'BRAGADO': 340, 'CHIVILCOY': 380,
-  'MERCEDES': 430, '25 DE MAYO': 370,
-  'NUEVE DE JULIO': 350, '9 DE JULIO': 350,
-  'GENERAL VIAMONTE': 340, 'LOS TOLDOS': 360,
-  'CARLOS TEJEDOR': 400, 'AMEGHINO': 370,
-  'RIVADAVIA': 420, 'GENERAL PINTO': 380,
-  'LEANDRO N ALEM': 370, 'ALEM': 370,
-  'SAN ANTONIO DE ARECO': 450,
-  'LUJAN': 480, 'LOBOS': 490,
-  'SALADILLO': 430, 'ROQUE PEREZ': 440,
-  'TAPALQUE': 410, 'OLAVARRIA': 430, 'OLAVARRÍA': 430,
-  'AZUL': 450, 'TANDIL': 510, 'BAHIA BLANCA': 600, 'BAHÍA BLANCA': 600,
-  'MAR DEL PLATA': 650, 'LA PLATA': 560,
-  // San Luis / Córdoba zona oeste
-  'RIO QUINTO': 200, 'RÍO QUINTO': 200,
-  'GENERAL DEHEZA': 100, 'HUINCA RENANCO': 120,
-  'SANTA ROSA': 280, 'REALICO': 240
-};
+
+// ── SISTEMA DE COORDENADAS REALES ──
+// Coordenadas de Marcos Juárez (origen)
+const MJ_LAT = -32.6975, MJ_LON = -62.1025;
+
+// Puntos geográficos — clientes y proveedores con coordenadas reales
+const PUNTOS_GEO = [{"nombre": "AGRICOLA GARCIA SOC", "lat": -26.828773, "lon": -65.179229, "distMJ": 932, "tipo": "cliente"}, {"nombre": "COUSSIRAT CARLOS Y PRO.", "lat": -36.800229, "lon": -59.851497, "distMJ": 650, "tipo": "cliente"}, {"nombre": "MARTINEZ CRISTIAN", "lat": -33.43282, "lon": -63.301809, "distMJ": 180, "tipo": "cliente"}, {"nombre": "PUYO, LAUTARO GASTON", "lat": -32.968604, "lon": -60.628968, "distMJ": 183, "tipo": "cliente"}, {"nombre": "MARANO, GUSTAVO DANIEL", "lat": -35.023447, "lon": -63.577439, "distMJ": 380, "tipo": "cliente"}, {"nombre": "PEHUENCHE SRL", "lat": -32.988156, "lon": -68.850168, "distMJ": 820, "tipo": "cliente"}, {"nombre": "MAZIN, EMILIANO EFREN", "lat": -34.977826, "lon": -67.681382, "distMJ": 746, "tipo": "cliente"}, {"nombre": "NORWAL SRL", "lat": -34.259946, "lon": -62.704916, "distMJ": 237, "tipo": "cliente"}, {"nombre": "QUIESS FERNANDO", "lat": -37.466573, "lon": -61.926866, "distMJ": 690, "tipo": "cliente"}, {"nombre": "EL TIO BETO S. CAP I SECC IV", "lat": -35.492813, "lon": -62.966151, "distMJ": 417, "tipo": "cliente"}, {"nombre": "PUIY, NICOLAS", "lat": -36.055459, "lon": -63.559295, "distMJ": 516, "tipo": "cliente"}, {"nombre": "FANZI JULIO", "lat": -35.916648, "lon": -64.278929, "distMJ": 533, "tipo": "cliente"}, {"nombre": "BUSSO ROBERTO", "lat": -35.022286, "lon": -63.581912, "distMJ": 380, "tipo": "cliente"}, {"nombre": "SARTIRANA CARLOS", "lat": -35.985718, "lon": -62.702448, "distMJ": 481, "tipo": "cliente"}, {"nombre": "SOSA RENZO", "lat": -32.929994, "lon": -63.247252, "distMJ": 143, "tipo": "cliente"}, {"nombre": "DANTE GORJON", "lat": -35.999707, "lon": -62.761443, "distMJ": 484, "tipo": "cliente"}, {"nombre": "CANTELMI, JAVIER DARIO", "lat": -35.379466, "lon": -64.472539, "distMJ": 480, "tipo": "cliente"}, {"nombre": "GOMEZ, PABLO ESTEBAN", "lat": -35.231522, "lon": -63.586098, "distMJ": 407, "tipo": "cliente"}, {"nombre": "D AGOSTINO, HUGO ENRIQUE", "lat": -35.663834, "lon": -63.737199, "distMJ": 471, "tipo": "cliente"}, {"nombre": "SOLUCIONES ALVEAR S. A. S", "lat": -35.241095, "lon": -63.60644, "distMJ": 409, "tipo": "cliente"}, {"nombre": "METALURGICA ACEDO", "lat": -35.231745, "lon": -63.596789, "distMJ": 408, "tipo": "cliente"}, {"nombre": "CIAROCHI, NAHUEL MATEO", "lat": -33.132042, "lon": -62.101661, "distMJ": 63, "tipo": "cliente"}, {"nombre": "LUCERO, JOSE LUIS", "lat": -35.015338, "lon": -62.994923, "distMJ": 352, "tipo": "cliente"}, {"nombre": "NOCCELLI, JOAQUIN", "lat": -32.925236, "lon": -62.462046, "distMJ": 55, "tipo": "cliente"}, {"nombre": "VERDUR, CLAUDIO HORACIO RAUL", "lat": -27.450105, "lon": -58.752361, "distMJ": 866, "tipo": "cliente"}, {"nombre": "WINCHEL DIEGO", "lat": -35.232891, "lon": -63.606099, "distMJ": 408, "tipo": "cliente"}, {"nombre": "LA CAROLINA IMPLEMENTOS", "lat": -33.618464, "lon": -64.590078, "distMJ": 329, "tipo": "cliente"}, {"nombre": "AGROSERVICIOS EL SAUCE S.R.L", "lat": -37.459531, "lon": -61.93864, "distMJ": 689, "tipo": "cliente"}, {"nombre": "SERGIO CERIOTTI S.R.L", "lat": -38.245248, "lon": -57.860726, "distMJ": 944, "tipo": "cliente"}, {"nombre": "ABAD GUSTAVO ALBERTO", "lat": -38.386039, "lon": -60.301101, "distMJ": 849, "tipo": "cliente"}, {"nombre": "MARANO, GUSTAVO DANIEL", "lat": -35.02343, "lon": -63.577419, "distMJ": 380, "tipo": "cliente"}, {"nombre": "OLIVERA DE ANTUNEZ, JOSE", "lat": -25.989001, "lon": -54.584217, "distMJ": 1355, "tipo": "cliente"}, {"nombre": "ALZUARTE, GUSTAVO JOSE", "lat": -34.45279, "lon": -59.441202, "distMJ": 409, "tipo": "cliente"}, {"nombre": "VALLESI DANIEL", "lat": -33.083386, "lon": -61.79201, "distMJ": 67, "tipo": "cliente"}, {"nombre": "GRAFFIGNA", "lat": -37.158016, "lon": -63.243164, "distMJ": 659, "tipo": "cliente"}, {"nombre": "BONAVITTA", "lat": -36.261479, "lon": -63.164199, "distMJ": 530, "tipo": "cliente"}, {"nombre": "ARRIEGUEZ", "lat": -37.312762, "lon": -59.988271, "distMJ": 713, "tipo": "cliente"}, {"nombre": "CARMONA", "lat": -34.498906, "lon": -61.549019, "distMJ": 269, "tipo": "cliente"}, {"nombre": "ESANDI FERNANDO ARIEL", "lat": -35.69943, "lon": -63.019314, "distMJ": 448, "tipo": "cliente"}, {"nombre": "AGROFERTIL S R L", "lat": -38.363765, "lon": -60.272492, "distMJ": 847, "tipo": "cliente"}, {"nombre": "gRAFFIGNA", "lat": -35.69943, "lon": -63.019314, "distMJ": 448, "tipo": "cliente"}, {"nombre": "GRUPO OBERTO", "lat": -34.34644, "lon": -64.917724, "distMJ": 415, "tipo": "cliente"}, {"nombre": "FANZI, JULIO CESAR", "lat": -35.916535, "lon": -64.278859, "distMJ": 533, "tipo": "cliente"}, {"nombre": "RODRIGUEZ WALTER MARCELO", "lat": -34.143638, "lon": -63.396707, "distMJ": 261, "tipo": "cliente"}, {"nombre": "BECERRA, ALDO ALFREDO", "lat": -34.963357, "lon": -67.691138, "distMJ": 747, "tipo": "cliente"}, {"nombre": "SERGIO MIRANDA", "lat": -36.049947, "lon": -63.562463, "distMJ": 515, "tipo": "cliente"}, {"nombre": "STORE IN HOUSE S. A", "lat": -33.256894, "lon": -60.303457, "distMJ": 233, "tipo": "cliente"}, {"nombre": "ALLENDE, ANDRES", "lat": -34.765, "lon": -62.985453, "distMJ": 317, "tipo": "cliente"}, {"nombre": "ARIEL BARBETTA", "lat": -32.939922, "lon": -63.249384, "distMJ": 144, "tipo": "cliente"}, {"nombre": "ZABALZA CRISTIAN", "lat": -36.05524, "lon": -63.572869, "distMJ": 516, "tipo": "cliente"}, {"nombre": "NARVARTE JUAN MANUEL", "lat": -35.988394, "lon": -62.701283, "distMJ": 481, "tipo": "cliente"}, {"nombre": "MALDONADO ENZO", "lat": -34.757353, "lon": -65.2545, "distMJ": 482, "tipo": "cliente"}, {"nombre": "DADANN NORMA ELSA", "lat": -36.05524, "lon": -63.572869, "distMJ": 516, "tipo": "cliente"}, {"nombre": "SUDESTE GASES", "lat": -32.687036, "lon": -62.122106, "distMJ": 3, "tipo": "proveedor"}, {"nombre": "MUSIAN CANCIANI", "lat": -32.68768, "lon": -62.098802, "distMJ": 1, "tipo": "proveedor"}, {"nombre": "CICAMAX", "lat": -32.77798, "lon": -61.621061, "distMJ": 60, "tipo": "proveedor"}, {"nombre": "LORENZO-CILINDROS", "lat": -32.778662, "lon": -61.622637, "distMJ": 60, "tipo": "proveedor"}, {"nombre": "TASSI", "lat": -32.694287, "lon": -61.527777, "distMJ": 70, "tipo": "proveedor"}, {"nombre": "IMD", "lat": -32.689709, "lon": -61.522143, "distMJ": 71, "tipo": "proveedor"}, {"nombre": "Alpha Fighiera srl", "lat": -33.187214, "lon": -60.46723, "distMJ": 211, "tipo": "proveedor"}, {"nombre": "SURCAR SRL", "lat": -32.423812, "lon": -63.207816, "distMJ": 140, "tipo": "proveedor"}, {"nombre": "FORJA CORDOBA", "lat": -31.444282, "lon": -63.996586, "distMJ": 294, "tipo": "proveedor"}, {"nombre": "Pinas Srl", "lat": -33.45944, "lon": -61.513341, "distMJ": 131, "tipo": "proveedor"}, {"nombre": "ROSPAR", "lat": -33.456263, "lon": -61.49644, "distMJ": 132, "tipo": "proveedor"}, {"nombre": "Mecanizados San Miguel SA", "lat": -33.524356, "lon": -61.464955, "distMJ": 142, "tipo": "proveedor"}, {"nombre": "Valoppi CD", "lat": -33.458959, "lon": -61.499746, "distMJ": 132, "tipo": "proveedor"}, {"nombre": "BAROR BULONERÍA", "lat": -32.978062, "lon": -60.670461, "distMJ": 179, "tipo": "proveedor"}, {"nombre": "Pren Llantas SRL", "lat": -33.007235, "lon": -60.79097, "distMJ": 165, "tipo": "proveedor"}, {"nombre": "Mecanizados Campa", "lat": -33.45014, "lon": -61.492222, "distMJ": 132, "tipo": "proveedor"}, {"nombre": "Moro Hidráulica S.R.L.", "lat": -32.67974, "lon": -61.510797, "distMJ": 72, "tipo": "proveedor"}, {"nombre": "Kadae SA", "lat": -32.692029, "lon": -61.525585, "distMJ": 70, "tipo": "proveedor"}, {"nombre": "Produmat Sa Cardanes Agricolas E Industriales", "lat": -31.868185, "lon": -62.726914, "distMJ": 142, "tipo": "proveedor"}];
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dlat = (lat2-lat1)*Math.PI/180;
+  const dlon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dlat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dlon/2)**2;
+  return Math.round(R * 2 * Math.asin(Math.sqrt(a)) * 1.3); // factor ruta 1.3
+}
 
 function getDistanciaDesdesMJ(localidad, provincia) {
-  if (!localidad && !provincia) return 999;
-  const loc = (localidad || '').toUpperCase().trim();
-  const prov = (provincia || '').toUpperCase().trim();
-  if (DISTANCIAS_DESDE_MJ[loc] !== undefined) return DISTANCIAS_DESDE_MJ[loc];
-  if (DISTANCIAS_DESDE_MJ[prov] !== undefined) return DISTANCIAS_DESDE_MJ[prov];
-  // Si no está en la tabla, buscar coincidencia parcial
-  for (const key of Object.keys(DISTANCIAS_DESDE_MJ)) {
-    if (loc.includes(key) || key.includes(loc)) return DISTANCIAS_DESDE_MJ[key];
-  }
-  return 500; // desconocido — poner lejos
+  if (!localidad && !provincia) return 500;
+  const buscar = (localidad||'').toUpperCase().trim();
+  // Buscar en PUNTOS_GEO por nombre exacto o parcial
+  const punto = PUNTOS_GEO.find(p => {
+    const n = p.nombre.toUpperCase();
+    return n === buscar || n.includes(buscar) || buscar.includes(n.split(',')[0].trim());
+  });
+  if (punto) return punto.distMJ;
+  // Fallback a tabla aproximada
+  return DISTANCIAS_FALLBACK[buscar] || DISTANCIAS_FALLBACK[(provincia||'').toUpperCase().trim()] || 400;
 }
+
+function buscarPuntoGeo(nombre) {
+  const buscar = (nombre||'').toUpperCase().trim();
+  return PUNTOS_GEO.find(p => {
+    const n = p.nombre.toUpperCase();
+    return n === buscar || n.includes(buscar) || buscar.includes(n.split(',')[0].trim());
+  });
+}
+
+// Tabla de fallback para ciudades no en la lista
+const DISTANCIAS_FALLBACK = {
+  'MARCOS JUAREZ': 0,
+  'MARCOS JUÁREZ': 0,
+  'CORDOBA': 160,
+  'CÓRDOBA': 160,
+  'ROSARIO': 220,
+  'SANTA FE': 300,
+  'BUENOS AIRES': 530,
+  'CABA': 530,
+  'BELL VILLE': 40,
+  'VILLA MARIA': 80,
+  'VILLA MARÍA': 80,
+  'RIO CUARTO': 130,
+  'VENADO TUERTO': 130,
+  'RUFINO': 180,
+  'LABOULAYE': 110,
+  'LA CARLOTA': 70,
+  'SAN FRANCISCO': 90,
+  'ARMSTRONG': 150,
+  'CASILDA': 190,
+  'VEDIA': 340,
+  'JUNIN': 360,
+  'JUNÍN': 360,
+  'LINCOLN': 320,
+  'PERGAMINO': 390,
+  'MENDOZA': 700,
+  'TUCUMAN': 780,
+  'TUCUMÁN': 780,
+  'ENTRE RIOS': 280,
+  'ENTRE RÍOS': 280,
+  'PARANA': 300,
+  'PARANÁ': 300,
+};
+
 
 async function procesarRutaPdfs(input) {
   const files = Array.from(input.files);
@@ -5509,7 +5523,24 @@ async function procesarRutaPdfs(input) {
   }
 
   // Calcular km totales estimados (ida y vuelta con recorrido optimizado)
-  const kmTotal = conDistancia[0].distancia * 2 + conDistancia.slice(1).reduce((s,e) => s + Math.abs(e.distancia - conDistancia[conDistancia.indexOf(e)-1]?.distancia || 0), 0);
+  // Calcular km totales del recorrido: MJ → parada1 → parada2 → ... → MJ
+  // Usar coordenadas reales si están disponibles
+  let kmTotal = 0;
+  let latAnterior = MJ_LAT, lonAnterior = MJ_LON;
+  for (const e of conDistancia) {
+    const punto = buscarPuntoGeo(e.cliente);
+    if (punto) {
+      kmTotal += haversineKm(latAnterior, lonAnterior, punto.lat, punto.lon);
+      latAnterior = punto.lat;
+      lonAnterior = punto.lon;
+    } else {
+      // Sin coordenadas exactas: usar distancia desde MJ como aproximación
+      kmTotal += e.distancia;
+      latAnterior = MJ_LAT; lonAnterior = MJ_LON;
+    }
+  }
+  // Vuelta a Marcos Juárez
+  kmTotal += haversineKm(latAnterior, lonAnterior, MJ_LAT, MJ_LON);
   const pesoTotalRuta = conDistancia.reduce((s,e) => s + (e.pesoKg||0), 0);
 
   // Autocompletar campos
