@@ -5262,12 +5262,18 @@ function extraerItemsDux(texto) {
 
     if (!cantStr) continue;
     const cant = parseFloat(cantStr.replace(',', '.'));
+    // Cantidad inválida: 0, negativa, mayor a 999, o decimal con más de 1 decimal (es un precio, no cantidad)
     if (cant <= 0 || cant > 999) continue;
+    // Si tiene decimales con más de 1 cifra decimal significativa, es un precio confundido con cantidad
+    const cantDecimales = cantStr.includes(',') ? cantStr.split(',')[1] : '';
+    if (cantDecimales.length >= 2 && cantDecimales !== '00') continue;
 
     desc = desc.replace(/\s+/g, ' ').trim();
     desc = desc.replace(/\s*\([\d,\.]+\s*KG[^)]*\)\s*(?:\([^)]*\))?\s*-?\s*$/i, '').trim();
     desc = desc.replace(/\s*-\s*$/, '').trim();
+    // Descartar si la descripción es solo un número o guión (artículos mal parseados)
     if (desc.length < 3 || /^(sub|iva|codigo|generado)/i.test(desc)) continue;
+    if (/^[-\s\d,\.]+$/.test(desc)) continue; // solo números/guiones = mal parseado
 
     const cantDisplay = cant === Math.floor(cant) ? String(Math.floor(cant)) : cantStr.replace(',', '.');
     items.push(cantDisplay + 'x ' + desc + ' [' + codigo + ']');
