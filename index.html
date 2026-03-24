@@ -999,6 +999,15 @@
                 <input type="date" id="ventaFechaDespacho" onchange="validarFechaDespacho(this)">
                 <div id="ventaFechaAviso" style="font-size:11px;margin-top:4px;display:none;"></div>
               </div>
+              <!-- Campos logística propia en ventas -->
+              <div class="form-group" id="ventaLogisticaWrap" style="display:none;">
+                <label>Zona de entrega</label>
+                <input type="text" id="ventaZonaEntrega" placeholder="Se completa desde el PDF">
+              </div>
+              <div class="form-group" id="ventaKmWrap" style="display:none;">
+                <label>Km estimados</label>
+                <input type="number" id="ventaKmRecorridos" placeholder="ida y vuelta" min="0">
+              </div>
               <div class="form-group full">
                 <label>📎 Presupuesto PDF (Dux) — genera el checklist automáticamente</label>
                 <input type="file" id="ventaPdfDux" accept="application/pdf" onchange="leerPdfDuxVenta(this)" style="width:100%;padding:6px;color:var(--text2);font-size:13px;">
@@ -4244,12 +4253,18 @@ function toggleVentaSCH() {
 }
 
 
-// Mostrar campo "otro" transporte en formulario de venta
+// Mostrar campo "otro" transporte y logística propia en formulario de venta
 document.addEventListener('change', function(e) {
   if (e.target && e.target.id === 'ventaTransporte') {
     const wrap = document.getElementById('ventaTransporteOtroWrap');
     const fechaEl = document.getElementById('ventaFechaDespacho');
+    const logWrap = document.getElementById('ventaLogisticaWrap');
+    const kmWrap = document.getElementById('ventaKmWrap');
     if (wrap) wrap.style.display = e.target.value === '__otro__' ? 'block' : 'none';
+    // Mostrar campos logística propia
+    const esPropia = esLogisticaPropia(e.target.value);
+    if (logWrap) logWrap.style.display = esPropia ? 'block' : 'none';
+    if (kmWrap) kmWrap.style.display = esPropia ? 'block' : 'none';
     // Preseleccionar próxima fecha de despacho si no hay una
     if (e.target.value && e.target.value !== '' && fechaEl && !fechaEl.value) {
       const prox = proximoDespacho();
@@ -4368,6 +4383,26 @@ async function leerPdfDuxVenta(input) {
       }
     }
 
+    // Autocompletar localidad y provincia en sección de logística propia
+    const localidadMatch = textoCompleto.match(/LOCALIDAD:\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)\s{2,}/i);
+    const provinciaMatch = textoCompleto.match(/PROVINCIA:\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)\s{2,}/i);
+    if (localidadMatch || provinciaMatch) {
+      const loc = localidadMatch ? localidadMatch[1].trim() : '';
+      const prov = provinciaMatch ? provinciaMatch[1].trim() : '';
+      const zonaEl = document.getElementById('ventaZonaEntrega');
+      if (zonaEl && !zonaEl.value) {
+        zonaEl.value = [loc, prov].filter(Boolean).join(', ');
+      }
+      // Si hay logística propia seleccionada, calcular km
+      const transp = document.getElementById('ventaTransporte')?.value || '';
+      if (esLogisticaPropia(transp)) {
+        const dist = getDistanciaDesdesMJ(loc, prov);
+        const kmEl = document.getElementById('ventaKmRecorridos');
+        if (kmEl && !kmEl.value && dist < 900) kmEl.value = dist * 2;
+      }
+      if (loc) autocompletado.push('Zona: ' + loc);
+    }
+
     // Mostrar resultado
     if (items.length > 0) {
       if (checklistEl) checklistEl.value = items.join('\n');
@@ -4459,6 +4494,10 @@ async function guardarVenta() {
       const checklistItems = checklistRaw
         ? checklistRaw.split('\n').map(l=>l.trim()).filter(Boolean).map(t=>({texto:t, tildado:false}))
         : [];
+      // Datos logística propia si corresponde
+      const esPropiaVenta = esLogisticaPropia(transporte);
+      const zona_entrega = esPropiaVenta ? (document.getElementById('ventaZonaEntrega')?.value.trim() || '') : '';
+      const km_recorridos = esPropiaVenta ? (parseInt(document.getElementById('ventaKmRecorridos')?.value) || null) : null;
       const nuevoDespacho = {
         id: Date.now() + 1,
         transporte,
@@ -4471,7 +4510,8 @@ async function guardarVenta() {
         presupuesto_pdf: '',
         checklist: checklistItems.length ? JSON.stringify(checklistItems) : '',
         checklist_confirmado: false,
-        confirmado_por: ''
+        confirmado_por: '',
+        zona_entrega, km_recorridos, costo_viaje: null
       };
       await supaPost('despachos', [nuevoDespacho]);
       despachos.unshift(nuevoDespacho);
@@ -5354,14 +5394,24 @@ async function procesarRutaPdfs(input) {
       const numMatch = texto.match(/N[oº°]\s*0*(\d{4,})/i);
 
       // Extraer peso total desde ítems
+      // Primero intenta desde el PDF (descripción con KG), después busca en el stock de la app
       const items = extraerItemsDux(texto);
       let pesoTotal = 0;
       items.forEach(item => {
         const cantMatch = item.match(/^(\d+(?:\.\d+)?)x/);
         const cant = cantMatch ? parseFloat(cantMatch[1]) : 1;
-        // Buscar peso en descripción: "(8,2 KG)" etc
+        // 1. Buscar peso en descripción del PDF: "(8,2 KG)"
         const pesoMatch = item.match(/\((\d+[,\.]\d+)\s*KG\)/i);
-        if (pesoMatch) pesoTotal += cant * parseFloat(pesoMatch[1].replace(',','.'));
+        if (pesoMatch) {
+          pesoTotal += cant * parseFloat(pesoMatch[1].replace(',','.'));
+        } else {
+          // 2. Buscar código en stock y usar peso_kg del producto
+          const codigoMatch = item.match(/\[([^\]]+)\]$/);
+          if (codigoMatch) {
+            const prod = products.find(p => p.code.trim().toLowerCase() === codigoMatch[1].toLowerCase());
+            if (prod && prod.peso_kg) pesoTotal += cant * parseFloat(prod.peso_kg);
+          }
+        }
       });
 
       const localidad = localidadMatch ? localidadMatch[1].trim() : '';
