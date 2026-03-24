@@ -4383,24 +4383,22 @@ async function leerPdfDuxVenta(input) {
       }
     }
 
-    // Autocompletar localidad y provincia en sección de logística propia
+    // Autocompletar localidad y provincia — siempre, independiente del transporte elegido
     const localidadMatch = textoCompleto.match(/LOCALIDAD:\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)\s{2,}/i);
     const provinciaMatch = textoCompleto.match(/PROVINCIA:\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+?)\s{2,}/i);
     if (localidadMatch || provinciaMatch) {
       const loc = localidadMatch ? localidadMatch[1].trim() : '';
       const prov = provinciaMatch ? provinciaMatch[1].trim() : '';
+      // Siempre llenar zona
       const zonaEl = document.getElementById('ventaZonaEntrega');
       if (zonaEl && !zonaEl.value) {
         zonaEl.value = [loc, prov].filter(Boolean).join(', ');
       }
-      // Si hay logística propia seleccionada, calcular km
-      const transp = document.getElementById('ventaTransporte')?.value || '';
-      if (esLogisticaPropia(transp)) {
-        const dist = getDistanciaDesdesMJ(loc, prov);
-        const kmEl = document.getElementById('ventaKmRecorridos');
-        if (kmEl && !kmEl.value && dist < 900) kmEl.value = dist * 2;
-      }
-      if (loc) autocompletado.push('Zona: ' + loc);
+      // Siempre calcular km (ida y vuelta)
+      const dist = getDistanciaDesdesMJ(loc, prov);
+      const kmEl = document.getElementById('ventaKmRecorridos');
+      if (kmEl && !kmEl.value && dist < 900) kmEl.value = dist * 2;
+      if (loc) autocompletado.push('Zona: ' + loc + (dist < 900 ? ' (~' + dist * 2 + ' km ida y vuelta)' : ''));
     }
 
     // Mostrar resultado
@@ -5336,8 +5334,28 @@ const DISTANCIAS_DESDE_MJ = {
   'MISIONES': 1100, 'ENTRE RIOS': 280,
   'ENTRE RÍOS': 280, 'PARANA': 300, 'PARANÁ': 300,
   'CONCORDIA': 400, 'GUALEGUAYCHU': 350,
-  'GUALEGUAYCHÚ': 350, 'CALCHAQUI': 420,
-  'CALCHAQUÍ': 420
+  'GUALEGUAYCHÚ': 350, 'CALCHAQUI': 420, 'CALCHAQUÍ': 420,
+  // Buenos Aires provincia — zona de Ignacio
+  'VEDIA': 340, 'JUNIN': 360, 'JUNÍN': 360,
+  'LINCOLN': 320, 'TRENQUE LAUQUEN': 400,
+  'PEHUAJO': 380, 'PEHUAJÓ': 380,
+  'BRAGADO': 340, 'CHIVILCOY': 380,
+  'MERCEDES': 430, '25 DE MAYO': 370,
+  'NUEVE DE JULIO': 350, '9 DE JULIO': 350,
+  'GENERAL VIAMONTE': 340, 'LOS TOLDOS': 360,
+  'CARLOS TEJEDOR': 400, 'AMEGHINO': 370,
+  'RIVADAVIA': 420, 'GENERAL PINTO': 380,
+  'LEANDRO N ALEM': 370, 'ALEM': 370,
+  'SAN ANTONIO DE ARECO': 450,
+  'LUJAN': 480, 'LOBOS': 490,
+  'SALADILLO': 430, 'ROQUE PEREZ': 440,
+  'TAPALQUE': 410, 'OLAVARRIA': 430, 'OLAVARRÍA': 430,
+  'AZUL': 450, 'TANDIL': 510, 'BAHIA BLANCA': 600, 'BAHÍA BLANCA': 600,
+  'MAR DEL PLATA': 650, 'LA PLATA': 560,
+  // San Luis / Córdoba zona oeste
+  'RIO QUINTO': 200, 'RÍO QUINTO': 200,
+  'GENERAL DEHEZA': 100, 'HUINCA RENANCO': 120,
+  'SANTA ROSA': 280, 'REALICO': 240
 };
 
 function getDistanciaDesdesMJ(localidad, provincia) {
