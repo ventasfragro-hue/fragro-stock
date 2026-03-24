@@ -4496,25 +4496,55 @@ async function guardarVenta() {
       const esPropiaVenta = esLogisticaPropia(transporte);
       const zona_entrega = esPropiaVenta ? (document.getElementById('ventaZonaEntrega')?.value.trim() || '') : '';
       const km_recorridos = esPropiaVenta ? (parseInt(document.getElementById('ventaKmRecorridos')?.value) || null) : null;
-      const nuevoDespacho = {
-        id: Date.now() + 1,
-        transporte,
-        fecha_despacho: fechaDespacho,
-        destinatario: cliente,
-        detalle: 'Venta #' + numero + (nota ? ' — ' + nota : ''),
-        observaciones: '',
-        estado: 'pendiente',
-        creado_por: currentUser,
-        presupuesto_pdf: '',
-        checklist: checklistItems.length ? JSON.stringify(checklistItems) : '',
-        checklist_confirmado: false,
-        confirmado_por: '',
-        zona_entrega, km_recorridos, costo_viaje: null
-      };
-      await supaPost('despachos', [nuevoDespacho]);
-      despachos.unshift(nuevoDespacho);
-      updateNavDespachos();
-    }
+
+      // Para logística propia: buscar si ya hay una orden del mismo día y vendedor
+      // Si existe → agregar cliente e ítems a esa orden (no crear nueva)
+      let despachoAgrupado = null;
+      if (esPropiaVenta) {
+        despachoAgrupado = despachos.find(d =>
+          d.fecha_despacho === fechaDespacho &&
+          d.transporte === transporte &&
+          d.estado === 'pendiente'
+        );
+      }
+
+      if (despachoAgrupado) {
+        // Agregar al despacho existente
+        const checklistExistente = (() => { try { return JSON.parse(despachoAgrupado.checklist || '[]'); } catch(e) { return []; } })();
+        const checklistActualizado = [...checklistExistente, ...checklistItems];
+        const detalleActualizado = despachoAgrupado.detalle + '\n' + cliente + ' — Venta #' + numero;
+        const destinatarioActualizado = despachoAgrupado.destinatario + ', ' + cliente;
+        const patchData = {
+          checklist: JSON.stringify(checklistActualizado),
+          detalle: detalleActualizado,
+          destinatario: destinatarioActualizado
+        };
+        if (zona_entrega && !despachoAgrupado.zona_entrega) patchData.zona_entrega = zona_entrega;
+        await supaPatch('despachos', despachoAgrupado.id, patchData);
+        Object.assign(despachoAgrupado, patchData);
+        updateNavDespachos();
+      } else {
+        // Crear nueva orden de despacho
+        const nuevoDespacho = {
+          id: Date.now() + 1,
+          transporte,
+          fecha_despacho: fechaDespacho,
+          destinatario: cliente,
+          detalle: cliente + ' — Venta #' + numero + (nota ? ' — ' + nota : ''),
+          observaciones: '',
+          estado: 'pendiente',
+          creado_por: currentUser,
+          presupuesto_pdf: '',
+          checklist: checklistItems.length ? JSON.stringify(checklistItems) : '',
+          checklist_confirmado: false,
+          confirmado_por: '',
+          zona_entrega, km_recorridos, costo_viaje: null
+        };
+        await supaPost('despachos', [nuevoDespacho]);
+        despachos.unshift(nuevoDespacho);
+        updateNavDespachos();
+      }
+    } // fin if transporte && fechaDespacho
 
     cancelVentaForm();
     renderVentas('todas');
@@ -4522,7 +4552,9 @@ async function guardarVenta() {
     if (numero.startsWith('SCH-')) setTimeout(() => mostrarBonusSCH(currentUser), 800);
     else {
       let msg = transporte
-        ? '✅ Venta registrada y orden de despacho creada para ' + transporte + '.'
+        ? (despachoAgrupado
+            ? '✅ Venta registrada y agregada al despacho existente de ' + transporte + ' del ' + fechaDespacho + '.'
+            : '✅ Venta registrada y nueva orden de despacho creada para ' + transporte + '.')
         : '✅ Venta registrada. Cuando cobres, subí el comprobante.';
       if (itemsDescontados.length > 0) msg += '\n\n📦 Stock descontado: ' + itemsDescontados.length + ' producto' + (itemsDescontados.length>1?'s':'') + '.';
       if (itemsSinStock.length > 0) msg += '\n⚠️ Códigos no encontrados en stock: ' + itemsSinStock.join(', ');
