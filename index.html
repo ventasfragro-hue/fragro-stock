@@ -368,6 +368,7 @@
 </style>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer onload="if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1143,11 +1144,23 @@
             </div>
             <div class="form-group">
               <label>Km estimados del viaje</label>
-              <input type="number" id="dKmRecorridos" placeholder="ej: 320" min="0">
+              <input type="number" id="dKmRecorridos" placeholder="ej: 320" min="0" oninput="calcularCostoViaje()">
             </div>
             <div class="form-group">
-              <label>Costo estimado del viaje ($)</label>
-              <input type="number" id="dCostoViaje" placeholder="ej: 50000" min="0">
+              <label>Consumo del vehículo (km/litro)</label>
+              <input type="number" id="dConsumo" placeholder="ej: 8" min="1" max="30" value="8" oninput="calcularCostoViaje()">
+            </div>
+            <div class="form-group">
+              <label>Precio combustible ($/litro)</label>
+              <input type="number" id="dPrecioCombustible" placeholder="ej: 1500" min="0" value="1500" oninput="calcularCostoViaje()">
+            </div>
+            <div class="form-group">
+              <label>Otros gastos ($) <span style="font-size:10px;color:var(--text3);">peajes, viáticos, etc.</span></label>
+              <input type="number" id="dOtrosGastos" placeholder="ej: 10000" min="0" value="0" oninput="calcularCostoViaje()">
+            </div>
+            <div class="form-group">
+              <label>Costo total estimado del viaje ($)</label>
+              <input type="number" id="dCostoViaje" placeholder="Se calcula automático" min="0" style="background:rgba(57,255,20,0.08);border-color:rgba(57,255,20,0.3);">
             </div>
             <div class="form-group">
               <label>Frecuencia</label>
@@ -1158,6 +1171,11 @@
                 <option value="esporadico">Esporádico</option>
               </select>
             </div>
+          </div>
+          <!-- Resumen de costo -->
+          <div id="dCostoResumen" style="display:none;margin-top:10px;background:rgba(0,0,0,0.3);border-radius:8px;padding:10px;font-size:12px;">
+            <div style="color:var(--accent);font-weight:700;margin-bottom:6px;">💰 Desglose del costo estimado</div>
+            <div id="dCostoDesglose"></div>
           </div>
 
           <!-- OPTIMIZADOR DE RUTA -->
@@ -5551,6 +5569,7 @@ async function procesarRutaPdfs(input) {
   const zonas = [...new Set(conDistancia.map(e => e.localidad || e.provincia).filter(Boolean))];
   document.getElementById('dZonaEntrega').value = zonas.join(' / ');
   document.getElementById('dKmRecorridos').value = Math.round(kmTotal);
+  calcularCostoViaje(); // Calcular costo automáticamente
 
   // Mostrar resultado
   status.textContent = '✅ Ruta optimizada — ' + conDistancia.length + ' entregas';
@@ -6152,6 +6171,42 @@ function renderProductosCliente() {
 
 function esLogisticaPropia(transporte) {
   return transporte && transporte.includes('Zona propia');
+}
+
+
+function calcularCostoViaje() {
+  const km = parseFloat(document.getElementById('dKmRecorridos')?.value) || 0;
+  const consumo = parseFloat(document.getElementById('dConsumo')?.value) || 8;
+  const precioComb = parseFloat(document.getElementById('dPrecioCombustible')?.value) || 1500;
+  const otrosGastos = parseFloat(document.getElementById('dOtrosGastos')?.value) || 0;
+
+  if (km <= 0) return;
+
+  const litros = km / consumo;
+  const costoCombustible = litros * precioComb;
+  const costoTotal = costoCombustible + otrosGastos;
+
+  // Autocompletar campo de costo total
+  const costoEl = document.getElementById('dCostoViaje');
+  if (costoEl) costoEl.value = Math.round(costoTotal);
+
+  // Mostrar desglose
+  const resumen = document.getElementById('dCostoResumen');
+  const desglose = document.getElementById('dCostoDesglose');
+  if (resumen && desglose) {
+    resumen.style.display = 'block';
+    desglose.innerHTML = [
+      ['📏 Km del viaje', km + ' km'],
+      ['⛽ Consumo', litros.toFixed(1) + ' litros (a ' + consumo + ' km/L)'],
+      ['💧 Costo combustible', '$' + Math.round(costoCombustible).toLocaleString('es-AR')],
+      otrosGastos > 0 ? ['🧾 Otros gastos', '$' + otrosGastos.toLocaleString('es-AR')] : null,
+      ['💰 TOTAL ESTIMADO', '$' + Math.round(costoTotal).toLocaleString('es-AR')],
+    ].filter(Boolean).map(([label, val], i) =>
+      `<div style="display:flex;justify-content:space-between;padding:3px 0;${i===4?'border-top:1px solid rgba(57,255,20,0.2);margin-top:4px;padding-top:6px;font-weight:700;color:var(--accent);':'color:var(--text3);'}">
+        <span>${label}</span><span style="color:${i===4?'var(--accent)':'var(--text)'};">${val}</span>
+      </div>`
+    ).join('');
+  }
 }
 
 function toggleLogisticaPropia() {
