@@ -2632,12 +2632,12 @@ function renderChartDeuda() {
   ctx.fillStyle = '#39FF14';
   ctx.font = 'bold 13px DM Sans,sans-serif';
   ctx.textAlign = 'left';
-  ctx.fillText('Cobrado: $'+(totalCobrado/1000).toFixed(0)+'k', padH, cy - barH/2 - 8);
+  ctx.fillText('Cobrado: $'+Math.round(totalCobrado).toLocaleString('es-AR'), padH, cy - barH/2 - 8);
 
   ctx.fillStyle = '#fbbf24';
   ctx.font = 'bold 13px DM Sans,sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText('Pendiente: $'+(totalDeuda/1000).toFixed(0)+'k', W - padH, cy - barH/2 - 8);
+  ctx.fillText('Pendiente: $'+Math.round(totalDeuda).toLocaleString('es-AR'), W - padH, cy - barH/2 - 8);
 
   // Deuda label abajo
   ctx.fillStyle = '#aaa';
@@ -6106,7 +6106,7 @@ function renderGraficosClientes() {
     `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
       <span style="font-size:11px;color:var(--text3);width:16px;">${i+1}</span>
       <div style="flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nombre}</div>
-      <span style="font-size:12px;font-weight:700;color:#60a5fa;">$${(monto/1000).toFixed(0)}k</span>
+      <span style="font-size:12px;font-weight:700;color:#60a5fa;">$${Math.round(monto).toLocaleString('es-AR')}</span>
     </div>`
   ).join('') || '<div style="color:var(--text3);font-size:12px;">Sin datos</div>';
 
