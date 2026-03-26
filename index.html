@@ -6001,7 +6001,12 @@ function nuevoPresupuesto() {
   presupuestoEditId = null;
   presupuestoItems = [];
   document.getElementById('formPresupuestoTitulo').textContent = '📄 Nuevo Presupuesto';
-  document.getElementById('pNumero').value = '';
+  // Número automático
+  const ultimoNum = presupuestos.reduce((max, p) => {
+    const n = parseInt((p.numero||'0').replace(/\D/g,'')) || 0;
+    return n > max ? n : max;
+  }, 0);
+  document.getElementById('pNumero').value = String(ultimoNum + 1).padStart(8, '0');
   document.getElementById('pFecha').value = new Date().toISOString().split('T')[0];
   document.getElementById('pCliente').value = '';
   document.getElementById('pCuit').value = '';
