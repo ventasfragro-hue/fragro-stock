@@ -444,8 +444,11 @@
       <div class="nav-item" onclick="showView('ventas',this)"><span class="nav-icon">📝</span> Ventas <span class="nav-count" id="navVentas" style="background:rgba(251,191,36,0.2);color:#fbbf24;">0</span></div>
     </div>
     <div class="sidebar-section">
-      <div class="sidebar-title">Rubros</div>
-      <div id="sidebarRubros"></div>
+      <div class="sidebar-title" onclick="toggleRubros()" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+        <span>Rubros</span>
+        <span id="rubrosToggleIcon" style="font-size:10px;color:var(--text3);">▸</span>
+      </div>
+      <div id="sidebarRubros" style="display:none;"></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-title">Gestión</div>
@@ -456,7 +459,6 @@
       <div class="nav-item" onclick="showView('presupuestos',this)"><span class="nav-icon">📄</span> Presupuestos <span class="nav-count" id="navPresupuestos" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
       <div class="nav-item" onclick="showView('graficos',this)"><span class="nav-icon">📈</span> Gráficos</div>
       <div class="nav-item" onclick="showView('clientes',this)"><span class="nav-icon">👥</span> Clientes <span class="nav-count" id="navClientes" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
-      <div class="nav-item" onclick="showView('crm',this)"><span class="nav-icon">👥</span> Clientes CRM</div>
       <div class="nav-item" id="navSmartStock" onclick="showView('smartstock',this)" style="display:none;"><span class="nav-icon">🧠</span> Stock Inteligente <span class="nav-count" id="navSmartCount" style="background:rgba(251,146,60,0.2);color:#fb923c;">0</span></div>
     </div>
   </aside>
@@ -1808,6 +1810,16 @@ async function initApp() {
   }, 15000);
 }
 
+
+function toggleRubros() {
+  const div = document.getElementById('sidebarRubros');
+  const icon = document.getElementById('rubrosToggleIcon');
+  if (!div) return;
+  const visible = div.style.display !== 'none';
+  div.style.display = visible ? 'none' : 'block';
+  if (icon) icon.textContent = visible ? '▸' : '▾';
+}
+
 function buildRubrosUI() {
   const rubrosBase = [
     'Accesorios Trailers',
@@ -2153,13 +2165,29 @@ function renderBannerDeudaVencida() {
   document.body.insertBefore(banner, document.body.children[1]);
 }
 
+
+function parseFechaAR(fechaStr) {
+  // Soporta "23/3/2026, 10:19:26" y "23/3/2026" y "2026-03-23"
+  if (!fechaStr) return new Date(0);
+  const str = String(fechaStr).split(',')[0].trim();
+  if (str.includes('/')) {
+    const [dia, mes, año] = str.split('/');
+    return new Date(parseInt(año), parseInt(mes)-1, parseInt(dia));
+  }
+  return new Date(str);
+}
+
 function verVendasVencidas() {
   const hoy = new Date(); hoy.setHours(0,0,0,0);
   const vencidas = ventas.filter(v => {
     if (v.estado !== 'pendiente_cobro') return false;
-    const f = new Date(v.fecha); f.setHours(0,0,0,0);
-    return (hoy - f) / 86400000 > 7;
-  }).sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+    const f = parseFechaAR(v.fecha);
+    if (!f) return false;
+    return Math.floor((hoy - f) / 86400000) > 7;
+  }).map(v => {
+    const f = parseFechaAR(v.fecha);
+    return { ...v, diasVencida: Math.floor((hoy - f) / 86400000) };
+  }).sort((a,b) => b.diasVencida - a.diasVencida);
 
   const totalDeuda = vencidas.reduce((s,v) => s + parseFloat(v.monto||0), 0);
 
@@ -2172,7 +2200,7 @@ function verVendasVencidas() {
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
 
   const filas = vencidas.map(v => {
-    const f = new Date(v.fecha); f.setHours(0,0,0,0);
+    const f = parseFechaAR(v.fecha);
     const dias = Math.floor((hoy - f) / 86400000);
     const color = dias > 30 ? '#ef4444' : dias > 14 ? '#f59e0b' : '#fbbf24';
     return `<div style="background:#0d1b2a;border:1px solid ${color}44;border-left:4px solid ${color};border-radius:10px;padding:14px;margin-bottom:10px;">
@@ -6411,7 +6439,7 @@ function renderGraficosVentas() {
   const ventasCobradas = ventas.filter(v => v.estado === 'cobrado');
   const montosMes = meses.map(m => {
     return ventasCobradas.filter(v => {
-      const f = new Date(v.fecha);
+      const f = parseFechaAR(v.fecha);
       return f.getFullYear() === m.año && f.getMonth() === m.mes;
     }).reduce((s,v) => s + parseFloat(v.monto||0), 0);
   });
