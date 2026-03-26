@@ -453,6 +453,7 @@
       <div class="nav-item" onclick="showView('ranking',this)"><span class="nav-icon">🏆</span> Ranking Ventas</div>
       <div class="nav-item" onclick="showView('cotizador',this)"><span class="nav-icon">🔧</span> Cotizador Cardánicas</div>
       <div class="nav-item" onclick="showView('buscador',this)"><span class="nav-icon">🔍</span> Buscador</div>
+      <div class="nav-item" onclick="showView('presupuestos',this)"><span class="nav-icon">📄</span> Presupuestos <span class="nav-count" id="navPresupuestos" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
       <div class="nav-item" onclick="showView('graficos',this)"><span class="nav-icon">📈</span> Gráficos</div>
       <div class="nav-item" onclick="showView('clientes',this)"><span class="nav-icon">👥</span> Clientes <span class="nav-count" id="navClientes" style="background:rgba(96,165,250,0.2);color:#60a5fa;">0</span></div>
       <div class="nav-item" onclick="showView('crm',this)"><span class="nav-icon">👥</span> Clientes CRM</div>
@@ -1872,6 +1873,7 @@ function showView(name, el) {
   if (name==='clientes') { loadClientes(); }
   if (name==='cotizador') { poblarSelectsCotizador(); calcularCotizacion(); }
   if (name==='buscador') { setTimeout(()=>document.getElementById('buscadorInput')?.focus(),100); }
+  if (name==='presupuestos') { loadPresupuestos(); }
   if (name==='graficos') { renderGraficoTab('ventas'); }
   if (name==='ventas') {
     const btnNV = document.getElementById('btnNuevaVenta');
@@ -4287,6 +4289,9 @@ function toggleVentaSCH() {
 
 // Mostrar campo "otro" transporte y logística propia en formulario de venta
 document.addEventListener('change', function(e) {
+  if (e.target && (e.target.id === 'pConIVA' || e.target.id === 'pSinIVA')) {
+    calcularTotalesPresupuesto();
+  }
   if (e.target && e.target.id === 'ventaTransporte') {
     const wrap = document.getElementById('ventaTransporteOtroWrap');
     const fechaEl = document.getElementById('ventaFechaDespacho');
@@ -5820,6 +5825,386 @@ FR AGRO Rodríguez y Cía — Tel: 3472 54-2298`;
 // ══════════════════════════════════════════
 // BUSCADOR GENERAL
 // ══════════════════════════════════════════
+
+// ══════════════════════════════════════════
+// PRESUPUESTOS
+// ══════════════════════════════════════════
+let presupuestos = [];
+let presupuestoItems = [];
+let presupuestoEditId = null;
+let presupuestoTabActual = 'todos';
+
+async function loadPresupuestos() {
+  const data = await supaGet('presupuestos', 'order=id.desc');
+  presupuestos = Array.isArray(data) ? data : [];
+  updateNavPresupuestos();
+  renderPresupuestos();
+}
+
+function updateNavPresupuestos() {
+  const el = document.getElementById('navPresupuestos');
+  const pendientes = presupuestos.filter(p => p.estado === 'pendiente').length;
+  if (el) el.textContent = pendientes;
+}
+
+function switchPresupuestoTab(tab, btn) {
+  presupuestoTabActual = tab;
+  document.querySelectorAll('#view-presupuestos .tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPresupuestos();
+}
+
+function renderPresupuestos() {
+  const cont = document.getElementById('presupuestosLista');
+  if (!cont) return;
+
+  let lista = [...presupuestos];
+  if (presupuestoTabActual !== 'todos') lista = lista.filter(p => p.estado === presupuestoTabActual);
+
+  document.getElementById('presupuestosSub').textContent = lista.length + ' presupuesto' + (lista.length !== 1 ? 's' : '');
+
+  if (lista.length === 0) {
+    cont.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text3);">No hay presupuestos en este estado</div>';
+    return;
+  }
+
+  const colores = { pendiente:'#fbbf24', aceptado:'#39FF14', rechazado:'#ef4444', vencido:'#aaa' };
+
+  cont.innerHTML = lista.map(p => {
+    const color = colores[p.estado] || '#aaa';
+    const items = (() => { try { return JSON.parse(p.items || '[]'); } catch(e) { return []; } })();
+    const tieneIVA = p.tiene_iva;
+
+    return `<div style="background:#112240;border:1px solid ${color}33;border-left:4px solid ${color};border-radius:12px;padding:16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <div>
+          <span style="font-size:15px;font-weight:700;color:var(--text);">Pres. #${p.numero}</span>
+          <span style="margin-left:10px;padding:2px 8px;background:${color}22;color:${color};border-radius:20px;font-size:11px;font-weight:700;">${p.estado.toUpperCase()}</span>
+          ${tieneIVA ? '<span style="margin-left:6px;padding:2px 6px;background:rgba(96,165,250,0.1);color:#60a5fa;border-radius:20px;font-size:10px;">c/IVA</span>' : '<span style="margin-left:6px;padding:2px 6px;background:rgba(255,255,255,0.05);color:#aaa;border-radius:20px;font-size:10px;">s/IVA</span>'}
+        </div>
+        <div style="font-size:12px;color:var(--text3);">${p.fecha}</div>
+      </div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">👤 ${p.cliente}</div>
+      ${p.cuit ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px;">CUIT: ${p.cuit}</div>` : ''}
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">${items.length} ítem${items.length !== 1 ? 's' : ''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:18px;font-weight:800;color:var(--accent);">$${Math.round(parseFloat(p.total||0)).toLocaleString('es-AR')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button onclick="verPresupuesto(${p.id})" style="padding:6px 12px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);color:var(--accent);border-radius:6px;cursor:pointer;font-size:12px;">👁️ Ver</button>
+          <button onclick="generarPDFPresupuesto(${p.id})" style="padding:6px 12px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60a5fa;border-radius:6px;cursor:pointer;font-size:12px;">📄 PDF</button>
+          ${p.estado === 'pendiente' ? `
+          <button onclick="cambiarEstadoPresupuesto(${p.id},'aceptado')" style="padding:6px 12px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);color:#39FF14;border-radius:6px;cursor:pointer;font-size:12px;">✅ Aceptado</button>
+          <button onclick="cambiarEstadoPresupuesto(${p.id},'rechazado')" style="padding:6px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;cursor:pointer;font-size:12px;">❌ Rechazado</button>
+          <button onclick="convertirEnVenta(${p.id})" style="padding:6px 12px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;border-radius:6px;cursor:pointer;font-size:12px;">💰 → Venta</button>
+          ` : ''}
+          ${isDaniel() ? `<button onclick="eliminarPresupuesto(${p.id})" style="padding:6px 12px;background:transparent;border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;cursor:pointer;font-size:12px;">🗑</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function nuevoPresupuesto() {
+  presupuestoEditId = null;
+  presupuestoItems = [];
+  document.getElementById('formPresupuestoTitulo').textContent = '📄 Nuevo Presupuesto';
+  document.getElementById('pNumero').value = '';
+  document.getElementById('pFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pCliente').value = '';
+  document.getElementById('pCuit').value = '';
+  document.getElementById('pObservaciones').value = '';
+  document.getElementById('pConIVA').checked = true;
+
+  // Autocompletar clientes
+  const dl = document.getElementById('pClienteList');
+  if (dl) {
+    const nombres = [...new Set(ventas.map(v=>v.cliente).filter(Boolean))].sort();
+    dl.innerHTML = nombres.map(n=>`<option value="${n}">`).join('');
+  }
+
+  agregarItemPresupuesto();
+  calcularTotalesPresupuesto();
+  document.getElementById('formPresupuesto').style.display = 'block';
+  document.getElementById('formPresupuesto').scrollIntoView({ behavior:'smooth' });
+}
+
+function cerrarFormPresupuesto() {
+  document.getElementById('formPresupuesto').style.display = 'none';
+  presupuestoItems = [];
+  presupuestoEditId = null;
+}
+
+function agregarItemPresupuesto() {
+  const id = Date.now();
+  presupuestoItems.push({ id, codigo:'', desc:'', cant:1, precio:0 });
+  renderItemsPresupuesto();
+}
+
+function renderItemsPresupuesto() {
+  const cont = document.getElementById('pItemsContainer');
+  if (!cont) return;
+  cont.innerHTML = presupuestoItems.map((item, idx) => `
+    <div style="display:grid;grid-template-columns:120px 1fr 80px 120px 36px;gap:8px;margin-bottom:8px;align-items:center;" id="pItem-${item.id}">
+      <input type="text" placeholder="Código" value="${item.codigo}" 
+        onchange="actualizarItemPresupuesto(${item.id},'codigo',this.value)"
+        style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:6px;padding:7px;font-size:12px;">
+      <input type="text" placeholder="Descripción" value="${item.desc}"
+        onchange="actualizarItemPresupuesto(${item.id},'desc',this.value)"
+        style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:6px;padding:7px;font-size:12px;">
+      <input type="number" placeholder="Cant." value="${item.cant}" min="1"
+        onchange="actualizarItemPresupuesto(${item.id},'cant',this.value)"
+        style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:6px;padding:7px;font-size:12px;text-align:center;">
+      <input type="number" placeholder="Precio unit." value="${item.precio || ''}" min="0"
+        onchange="actualizarItemPresupuesto(${item.id},'precio',this.value)"
+        style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:6px;padding:7px;font-size:12px;">
+      <button onclick="eliminarItemPresupuesto(${item.id})" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:6px;padding:7px;cursor:pointer;font-size:14px;">✕</button>
+    </div>
+  `).join('') || '<div style="color:var(--text3);font-size:12px;padding:8px 0;">Agregá al menos un ítem</div>';
+}
+
+function actualizarItemPresupuesto(id, campo, valor) {
+  const item = presupuestoItems.find(i => i.id === id);
+  if (!item) return;
+  if (campo === 'cant' || campo === 'precio') {
+    item[campo] = parseFloat(valor) || 0;
+  } else {
+    item[campo] = valor;
+    // Si es código, buscar en stock
+    if (campo === 'codigo' && valor) {
+      const prod = products.find(p => p.code.trim().toLowerCase() === valor.toLowerCase());
+      if (prod) {
+        item.desc = prod.desc;
+        renderItemsPresupuesto();
+      }
+    }
+  }
+  calcularTotalesPresupuesto();
+}
+
+function eliminarItemPresupuesto(id) {
+  presupuestoItems = presupuestoItems.filter(i => i.id !== id);
+  renderItemsPresupuesto();
+  calcularTotalesPresupuesto();
+}
+
+function calcularTotalesPresupuesto() {
+  const subtotal = presupuestoItems.reduce((s,i) => s + (i.cant * i.precio), 0);
+  const tieneIVA = document.getElementById('pConIVA')?.checked;
+  const iva = tieneIVA ? subtotal * 0.21 : 0;
+  const total = subtotal + iva;
+
+  document.getElementById('pSubtotalDisplay').textContent = '$' + Math.round(subtotal).toLocaleString('es-AR');
+  document.getElementById('pIVADisplay').textContent = '$' + Math.round(iva).toLocaleString('es-AR');
+  document.getElementById('pTotalDisplay').textContent = '$' + Math.round(total).toLocaleString('es-AR');
+  const ivaRow = document.getElementById('pIVARow');
+  if (ivaRow) ivaRow.style.display = tieneIVA ? 'flex' : 'none';
+
+  return { subtotal, iva, total };
+}
+
+async function guardarPresupuesto() {
+  const numero = document.getElementById('pNumero').value.trim();
+  const cliente = document.getElementById('pCliente').value.trim();
+  if (!numero) { alert('Ingresá el número de presupuesto'); return; }
+  if (!cliente) { alert('Ingresá el cliente'); return; }
+  if (presupuestoItems.length === 0 || presupuestoItems.every(i => !i.desc)) { alert('Agregá al menos un ítem'); return; }
+
+  const { subtotal, iva, total } = calcularTotalesPresupuesto();
+  const tieneIVA = document.getElementById('pConIVA')?.checked;
+
+  const data = {
+    numero,
+    fecha: document.getElementById('pFecha').value,
+    cliente,
+    cuit: document.getElementById('pCuit').value.trim(),
+    items: JSON.stringify(presupuestoItems),
+    subtotal: Math.round(subtotal),
+    monto_iva: Math.round(iva),
+    total: Math.round(total),
+    tiene_iva: tieneIVA,
+    estado: 'pendiente',
+    observaciones: document.getElementById('pObservaciones').value.trim(),
+    creado_por: currentUser
+  };
+
+  if (presupuestoEditId) {
+    await supaPatch('presupuestos', presupuestoEditId, data);
+    const idx = presupuestos.findIndex(p => p.id === presupuestoEditId);
+    if (idx >= 0) presupuestos[idx] = { ...presupuestos[idx], ...data };
+  } else {
+    data.id = Date.now();
+    const res = await supaPost('presupuestos', [data]);
+    if (res && !res.error) presupuestos.unshift(data);
+  }
+
+  cerrarFormPresupuesto();
+  updateNavPresupuestos();
+  renderPresupuestos();
+  showToast('✅ Presupuesto guardado');
+}
+
+async function guardarYGenerarPDF() {
+  await guardarPresupuesto();
+  if (presupuestos.length > 0) generarPDFPresupuesto(presupuestos[0].id);
+}
+
+async function cambiarEstadoPresupuesto(id, estado) {
+  await supaPatch('presupuestos', id, { estado });
+  const p = presupuestos.find(x => x.id === id);
+  if (p) p.estado = estado;
+  updateNavPresupuestos();
+  renderPresupuestos();
+}
+
+async function eliminarPresupuesto(id) {
+  if (!confirm('¿Eliminar este presupuesto?')) return;
+  await supaDelete('presupuestos', id);
+  presupuestos = presupuestos.filter(p => p.id !== id);
+  updateNavPresupuestos();
+  renderPresupuestos();
+}
+
+function verPresupuesto(id) {
+  const p = presupuestos.find(x => x.id === id);
+  if (!p) return;
+  const items = (() => { try { return JSON.parse(p.items||'[]'); } catch(e){return[];} })();
+  const tieneIVA = p.tiene_iva;
+
+  let html = `<div style="padding:20px;max-width:600px;margin:0 auto;font-family:'DM Sans',sans-serif;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:18px;font-weight:800;color:var(--accent);">FR AGRO Rodríguez y Cía S.A.S.</div>
+      <div style="font-size:12px;color:var(--text3);">Calle 5 Nro 2528, Marcos Juárez | Tel: 3472 54-2298</div>
+      <div style="font-size:20px;font-weight:800;margin-top:12px;">PRESUPUESTO Nº ${p.numero}</div>
+      <div style="font-size:12px;color:var(--text3);">Fecha: ${p.fecha}</div>
+    </div>
+    <div style="margin-bottom:16px;"><strong>Cliente:</strong> ${p.cliente}</div>
+    ${p.cuit ? `<div style="margin-bottom:16px;"><strong>CUIT:</strong> ${p.cuit}</div>` : ''}
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+      <tr style="background:rgba(57,255,20,0.1);">
+        <th style="padding:8px;text-align:left;font-size:12px;">Código</th>
+        <th style="padding:8px;text-align:left;font-size:12px;">Descripción</th>
+        <th style="padding:8px;text-align:center;font-size:12px;">Cant.</th>
+        <th style="padding:8px;text-align:right;font-size:12px;">Precio Unit.</th>
+        <th style="padding:8px;text-align:right;font-size:12px;">Subtotal</th>
+      </tr>
+      ${items.map(i => `<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+        <td style="padding:8px;font-size:12px;color:var(--text3);">${i.codigo||'—'}</td>
+        <td style="padding:8px;font-size:12px;">${i.desc||'—'}</td>
+        <td style="padding:8px;font-size:12px;text-align:center;">${i.cant}</td>
+        <td style="padding:8px;font-size:12px;text-align:right;">$${Math.round(i.precio).toLocaleString('es-AR')}</td>
+        <td style="padding:8px;font-size:12px;text-align:right;font-weight:600;">$${Math.round(i.cant*i.precio).toLocaleString('es-AR')}</td>
+      </tr>`).join('')}
+    </table>
+    <div style="text-align:right;">
+      <div style="font-size:13px;margin-bottom:4px;">Subtotal: <strong>$${Math.round(p.subtotal||0).toLocaleString('es-AR')}</strong></div>
+      ${tieneIVA ? `<div style="font-size:13px;margin-bottom:4px;">IVA 21%: <strong>$${Math.round(p.monto_iva||0).toLocaleString('es-AR')}</strong></div>` : ''}
+      <div style="font-size:18px;font-weight:800;color:var(--accent);">TOTAL: $${Math.round(p.total||0).toLocaleString('es-AR')}</div>
+    </div>
+    ${p.observaciones ? `<div style="margin-top:16px;font-size:12px;color:var(--text3);border-top:1px solid rgba(255,255,255,0.1);padding-top:12px;">${p.observaciones}</div>` : ''}
+  </div>`;
+
+  // Mostrar en modal
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `<div style="background:#0d1b2a;border:1px solid var(--accent);border-radius:16px;padding:24px;max-width:650px;width:100%;max-height:85vh;overflow-y:auto;">
+    ${html}
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+      <button onclick="generarPDFPresupuesto(${id})" style="padding:10px 20px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:'DM Sans',sans-serif;">📄 Generar PDF</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:10px 20px;background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;">Cerrar</button>
+    </div>
+  </div>`;
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
+function generarPDFPresupuesto(id) {
+  const p = presupuestos.find(x => x.id === id);
+  if (!p) return;
+  const items = (() => { try { return JSON.parse(p.items||'[]'); } catch(e){return[];} })();
+  const tieneIVA = p.tiene_iva;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; color: #000; font-size: 13px; }
+    .header { text-align: center; margin-bottom: 24px; border-bottom: 2px solid #000; padding-bottom: 16px; }
+    .header h1 { font-size: 20px; margin: 0 0 4px; }
+    .header h2 { font-size: 16px; margin: 8px 0 0; }
+    .datos { margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    th { background: #1a1a1a; color: #fff; padding: 8px; text-align: left; font-size: 12px; }
+    td { padding: 7px 8px; border-bottom: 1px solid #ddd; font-size: 12px; }
+    .totales { text-align: right; margin-top: 8px; }
+    .total-final { font-size: 18px; font-weight: bold; margin-top: 8px; }
+    .footer { margin-top: 32px; font-size: 11px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 12px; }
+  </style></head><body>
+  <div class="header">
+    <h1>FR AGRO Rodríguez y Cía S.A.S.</h1>
+    <div>Calle 5 Nro 2528, Marcos Juárez, Córdoba</div>
+    <div>Tel: 3472 54-2298 / 3472 54-5715 | ventas.fragro@gmail.com</div>
+    <div>CUIT: 30-71727936-7 | Responsable Inscripto</div>
+    <h2>PRESUPUESTO Nº ${p.numero}</h2>
+    <div>Fecha: ${p.fecha}</div>
+  </div>
+  <div class="datos">
+    <strong>Señor/es:</strong> ${p.cliente}<br>
+    ${p.cuit ? `<strong>CUIT:</strong> ${p.cuit}<br>` : ''}
+    <strong>IVA:</strong> ${tieneIVA ? 'Responsable Inscripto' : 'Consumidor Final'}
+  </div>
+  <table>
+    <tr>
+      <th>Código</th><th>Descripción</th><th style="text-align:center">Cant.</th>
+      <th style="text-align:right">Precio Unit.</th><th style="text-align:right">% IVA</th><th style="text-align:right">Subtotal c/IVA</th>
+    </tr>
+    ${items.map(i => {
+      const sub = i.cant * i.precio;
+      const subIVA = tieneIVA ? sub * 1.21 : sub;
+      return `<tr>
+        <td>${i.codigo||'—'}</td>
+        <td>${i.desc||'—'}</td>
+        <td style="text-align:center">${i.cant},00</td>
+        <td style="text-align:right">$${Math.round(i.precio).toLocaleString('es-AR')}</td>
+        <td style="text-align:right">${tieneIVA?'21,00':'0,00'}</td>
+        <td style="text-align:right">$${Math.round(subIVA).toLocaleString('es-AR')}</td>
+      </tr>`;
+    }).join('')}
+  </table>
+  <div class="totales">
+    <div>SUBTOTAL: <strong>$${Math.round(p.subtotal||0).toLocaleString('es-AR')}</strong></div>
+    <div>DESCUENTO: <strong>$0,00</strong></div>
+    ${tieneIVA ? `<div>MONTO IVA: <strong>$${Math.round(p.monto_iva||0).toLocaleString('es-AR')}</strong></div>` : ''}
+    <div class="total-final">TOTAL: $${Math.round(p.total||0).toLocaleString('es-AR')}</div>
+  </div>
+  ${p.observaciones ? `<div style="margin-top:20px;font-size:12px;color:#666;border-top:1px solid #ddd;padding-top:12px;">${p.observaciones}</div>` : ''}
+  <div class="footer">Generado por FR AGRO Stock Management | Válido por 48 horas</div>
+  </body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.print();
+}
+
+function convertirEnVenta(id) {
+  const p = presupuestos.find(x => x.id === id);
+  if (!p) return;
+  // Navegar a ventas y pre-cargar datos
+  const navBtn = document.querySelector('.nav-item[onclick*="ventas"]');
+  showView('ventas', navBtn);
+  setTimeout(() => {
+    showVentaForm();
+    document.getElementById('ventaNumero').value = p.numero;
+    document.getElementById('ventaCliente').value = p.cliente;
+    document.getElementById('ventaMonto').value = p.total;
+    if (p.tiene_iva) document.getElementById('ventaConIVA').checked = true;
+    else document.getElementById('ventaSinIVA').checked = true;
+    // Cargar checklist desde items
+    const items = (() => { try { return JSON.parse(p.items||'[]'); } catch(e){return[];} })();
+    const checklistEl = document.getElementById('ventaChecklist');
+    if (checklistEl) checklistEl.value = items.filter(i=>i.desc).map(i=>i.cant+'x '+i.desc+(i.codigo?' ['+i.codigo+']':'')).join('\n');
+    showToast('✅ Datos del presupuesto cargados en la venta');
+  }, 300);
+}
+
 function ejecutarBusqueda() {
   const q = (document.getElementById('buscadorInput')?.value || '').toLowerCase().trim();
   const cont = document.getElementById('buscadorResultados');
@@ -6455,6 +6840,92 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.q
     <div style="background:#112240;border:1px solid var(--border);border-radius:12px;padding:16px;">
       <div style="font-size:12px;color:var(--text3);margin-bottom:12px;font-weight:700;">📍 CLIENTES POR ZONA</div>
       <div id="gClientesZona"></div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== PRESUPUESTOS ===== -->
+<div class="view" id="view-presupuestos">
+  <div class="page-header">
+    <div>
+      <div class="page-title">📄 Presupuestos</div>
+      <div class="page-sub" id="presupuestosSub">Generá y gestioná presupuestos para clientes</div>
+    </div>
+    <button class="btn-primary" onclick="nuevoPresupuesto()" style="padding:10px 20px;">+ Nuevo Presupuesto</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="pedido-tabs" style="margin-bottom:16px;">
+    <button class="tab-btn active" onclick="switchPresupuestoTab('todos',this)">📋 Todos</button>
+    <button class="tab-btn" onclick="switchPresupuestoTab('pendiente',this)">🟡 Pendientes</button>
+    <button class="tab-btn" onclick="switchPresupuestoTab('aceptado',this)">🟢 Aceptados</button>
+    <button class="tab-btn" onclick="switchPresupuestoTab('rechazado',this)">🔴 Rechazados</button>
+  </div>
+
+  <!-- Lista presupuestos -->
+  <div id="presupuestosLista"></div>
+
+  <!-- FORMULARIO NUEVO PRESUPUESTO -->
+  <div id="formPresupuesto" style="display:none;background:#112240;border:1px solid var(--accent);border-radius:12px;padding:24px;margin-top:16px;">
+    <div style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:20px;" id="formPresupuestoTitulo">📄 Nuevo Presupuesto</div>
+
+    <!-- Datos cliente -->
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-group">
+        <label>Número de Presupuesto</label>
+        <input type="text" id="pNumero" placeholder="ej: 00007300" style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;width:100%;font-size:13px;">
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="pFecha" style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;width:100%;font-size:13px;">
+      </div>
+      <div class="form-group full">
+        <label>Cliente (nombre o razón social)</label>
+        <input type="text" id="pCliente" placeholder="ej: MARTINEZ CRISTIAN" list="pClienteList" style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;width:100%;font-size:13px;">
+        <datalist id="pClienteList"></datalist>
+      </div>
+      <div class="form-group">
+        <label>CUIT</label>
+        <input type="text" id="pCuit" placeholder="ej: 20391725005" style="background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;width:100%;font-size:13px;">
+      </div>
+      <div class="form-group">
+        <label>¿Incluye IVA?</label>
+        <div style="display:flex;gap:16px;margin-top:8px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="pIVA" id="pConIVA" value="si" checked style="width:auto;margin:0;"> Sí — con IVA (21%)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+            <input type="radio" name="pIVA" id="pSinIVA" value="no" style="width:auto;margin:0;"> No — sin IVA
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;">📦 Ítems del Presupuesto</div>
+      <div id="pItemsContainer"></div>
+      <button onclick="agregarItemPresupuesto()" style="margin-top:10px;padding:8px 16px;background:rgba(57,255,20,0.1);border:1px solid rgba(57,255,20,0.3);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-family:'DM Sans',sans-serif;">+ Agregar ítem</button>
+    </div>
+
+    <!-- Observaciones -->
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Observaciones</label>
+      <textarea id="pObservaciones" rows="2" placeholder="Condiciones, validez del presupuesto, etc." style="width:100%;background:#0a0a0a;border:1px solid #333;color:#fff;border-radius:8px;padding:10px;font-size:13px;resize:vertical;"></textarea>
+    </div>
+
+    <!-- Totales -->
+    <div id="pTotalesBox" style="background:rgba(0,0,0,0.3);border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;"><span style="color:var(--text3);">Subtotal s/IVA</span><span id="pSubtotalDisplay" style="color:var(--text);font-weight:600;">$0</span></div>
+      <div id="pIVARow" style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;"><span style="color:var(--text3);">IVA 21%</span><span id="pIVADisplay" style="color:var(--text);">$0</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:800;padding:8px 0 4px;border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;"><span style="color:var(--accent);">TOTAL</span><span id="pTotalDisplay" style="color:var(--accent);">$0</span></div>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button onclick="guardarPresupuesto()" class="btn-primary" style="padding:12px 28px;">💾 GUARDAR</button>
+      <button onclick="guardarYGenerarPDF()" style="padding:12px 28px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);color:#60a5fa;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;font-family:'DM Sans',sans-serif;">📄 GUARDAR Y GENERAR PDF</button>
+      <button onclick="cerrarFormPresupuesto()" style="padding:12px 20px;background:transparent;border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;">Cancelar</button>
     </div>
   </div>
 </div>
